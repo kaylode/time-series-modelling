@@ -9,10 +9,8 @@ from tqdm import tqdm
 from statsmodels.tsa.seasonal import STL
 from statsmodels.graphics.tsaplots import plot_acf
 
-from datetime import datetime
-from source.visualize import visualize_ts
+from source.visualize import visualize_ts, visualize_stl
 from source.constants import TASK_COLUMNS
-from source.preprocess import missing_timestamps
 import argparse
 import yaml
 
@@ -39,48 +37,135 @@ def plot_acf_(df, outname=None):
     else:
         plt.show()
 
+def detect_anomalies_rolling_mean(
+        df, time_column, value_column,
+        window_size=10, threshold=2.0, 
+        out_dir=None, visualize_freq='D'
+    ):
 
-def detect_anomalies(df, config={}):
+    # Compute rolling mean
+    df['rolling_mean'] = df[value_column].rolling(window=window_size).mean()
+    diff_rolling_mean = df['rolling_mean'].diff()
 
-    train_df = df.copy()
-    train_df = train_df.sort_values(by='timestamp')
-    train_df = train_df.set_index('timestamp')
-    train_df = train_df['kpi_value']
-    seasonality = config.get('seasonality', None)
-    freq = config.get('freq', None)
+    diff_rolling_mean_mean = diff_rolling_mean.mean()
+    diff_rolling_mean_std = diff_rolling_mean.std()
+    lower = diff_rolling_mean_mean - threshold*diff_rolling_mean_std
+    upper = diff_rolling_mean_mean + threshold*diff_rolling_mean_std
 
-    # mts = missing_timestamps(df, 'timestamp', freq=freq)
-    # plot_acf_(df, outname=None)
+    # Plot rolling mean
+    plt.figure(figsize=(16,4))
+    plt.plot(df[time_column], df['rolling_mean'], label='Rolling mean')
+    plt.plot(df[time_column], diff_rolling_mean, label='Rolling mean residuals')
+    plt.xticks(rotation=90)
+    plt.fill_between(
+        [df[time_column].min(), df[time_column].max()], 
+        lower, upper, color='g', alpha=0.25, 
+        linestyle='--', linewidth=2
+    )
+    plt.legend()
+    plt.savefig(osp.join(out_dir, 'rolling_mean.png'), bbox_inches='tight')
 
-    import pdb; pdb.set_trace()
+    # Mark anomalies based on threshold (you can adjust this threshold as needed)
+    anomalies = df[(diff_rolling_mean < lower) | (diff_rolling_mean > upper)]
 
-    stl = STL(train_df, seasonal=seasonality)
+    visualize_ts(
+        df, time_column, value_column, 
+        outpath=osp.join(out_dir, 'anomalies_rolling_mean.png'),
+        freq=visualize_freq,
+        anomalies=anomalies,
+        figsize=(16,4)
+    )
+
+def detect_anomalies_rolling_std(
+        df, time_column, value_column,
+        window_size, threshold=2.0, 
+        out_dir=None, visualize_freq='D'
+    ):
+    # Compute rolling standard deviation
+    df['rolling_std'] = df[value_column].rolling(window=window_size).std()
+    diff_rolling_std = df['rolling_std'].diff()
+
+    diff_rolling_std_mean = diff_rolling_std.mean()
+    diff_rolling_std_std = diff_rolling_std.std()
+    lower = diff_rolling_std_mean - threshold*diff_rolling_std_std
+    upper = diff_rolling_std_mean + threshold*diff_rolling_std_std
+
+    # Plot rolling std
+    plt.figure(figsize=(16,4))
+    plt.plot(df[time_column], df['rolling_std'], label='Rolling std')
+    plt.plot(df[time_column], diff_rolling_std, label='Rolling std residuals')
+    plt.xticks(rotation=90)
+    plt.fill_between(
+        [df[time_column].min(), df[time_column].max()], 
+        lower, upper, color='g', alpha=0.25, 
+        linestyle='--', linewidth=2
+    )
+    plt.legend()
+    plt.savefig(osp.join(out_dir, 'rolling_std.png'), bbox_inches='tight')
+
+    # Mark anomalies based on threshold (you can adjust this threshold as needed)
+    anomalies = df[(diff_rolling_std < lower) | (diff_rolling_std > upper)]
+    visualize_ts(
+        df, time_column, value_column, 
+        outpath=osp.join(out_dir, 'anomalies_rolling_std.png'),
+        freq=visualize_freq,
+        anomalies=anomalies,
+        figsize=(16,4)
+    )
+
+def detect_anomalies_stl(
+        df, time_column, value_column, 
+        period=None,
+        visualize_freq='D',
+        threshold=3,
+        out_dir:str=None
+    ):
+
+    df = df.sort_values(by=time_column)
+
+    # Decompose into trend, seasonal, and residual
+    stl = STL(df[value_column], period=period)
     result = stl.fit()
     seasonal, trend, resid = result.seasonal, result.trend, result.resid
-    import pdb; pdb.set_trace()
+    visualize_stl(
+        df[value_column], 
+        trend, seasonal, resid, 
+        out_dir=out_dir,
+        figsize=(16,16)
+    )
 
-    # plt.figure(figsize=(8,6))
+    # Plot the original series and the estimated trend
+    estimated = trend + seasonal
+    plt.figure(figsize=(16,4))
+    plt.plot(df[value_column])
+    plt.plot(estimated)
+    plt.savefig(osp.join(out_dir, 'estimated.png'), bbox_inches='tight')
+    plt.close()
 
-    # plt.subplot(4,1,1)
-    # plt.plot(df['value'])
-    # plt.title('Original Series', fontsize=16)
+    # Detect anaomalies based on residuals
+    resid_mu = resid.mean()
+    resid_dev = resid.std()
+    lower = resid_mu - threshold*resid_dev
+    upper = resid_mu + threshold*resid_dev
+    plt.figure(figsize=(16,4))
+    plt.plot(resid)
+    plt.fill_between(
+        [resid.index.min(), resid.index.max()], 
+        lower, upper, color='g', alpha=0.25, 
+        linestyle='--', linewidth=2
+    )
+    plt.savefig(osp.join(out_dir, 'residual.png'), bbox_inches='tight')
 
-    # plt.subplot(4,1,2)
-    # plt.plot(trend)
-    # plt.title('Trend', fontsize=16)
-
-    # plt.subplot(4,1,3)
-    # plt.plot(seasonal)
-    # plt.title('Seasonal', fontsize=16)
-
-    # plt.subplot(4,1,4)
-    # plt.plot(resid)
-    # plt.title('Residual', fontsize=16)
-
-    # plt.tight_layout()
-
-
-
+    # Visualize anomalies
+    anomalies = df[(resid < lower) | (resid > upper)]
+    visualize_ts(
+        df, time_column, value_column, 
+        outpath=osp.join(out_dir, 'anomalies_stl.png'),
+        freq=visualize_freq,
+        anomalies=anomalies,
+        figsize=(16,4)
+    )
+   
 if __name__ == '__main__':
 
     args = parser.parse_args()
@@ -89,18 +174,43 @@ if __name__ == '__main__':
     task = 'AD&P'
     time_column = TASK_COLUMNS[task]['time_column']
     value_column = TASK_COLUMNS[task]['value_column']
-    freq = TASK_COLUMNS[task]['freq']
 
     # load yaml file
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
-    filenames = ['dataset_1.csv'] #os.listdir(DATA_DIR)
+    filenames = ['dataset_1.csv', 'dataset_2.csv', 'dataset_3.csv'] #os.listdir(DATA_DIR)
     for filename in tqdm(filenames):
         filepath = osp.join(DATA_DIR, filename)
         file_prefix = filename.split('.')[0]
         config = configs[file_prefix]
         df = pd.read_csv(filepath)
         df[time_column] = pd.to_datetime(df[time_column])
-        detect_anomalies(df, config)
-        break
 
+        out_dir = osp.join(OUT_DIR, file_prefix)
+        os.makedirs(out_dir, exist_ok=True)
+        if config['anomalies']['method'] == 'stl':
+            detect_anomalies_stl(
+                df, time_column, value_column,
+                period=config['seasonality'],
+                visualize_freq=config['visualize_freq'],
+                threshold=config['anomalies']['threshold'],
+                out_dir=out_dir
+            )
+        elif config['anomalies']['method'] == 'rolling_mean':
+            detect_anomalies_rolling_mean(
+                df, time_column, value_column,
+                window_size=config['anomalies']['window_size'], 
+                threshold=config['anomalies']['threshold'], 
+                visualize_freq=config['visualize_freq'],
+                out_dir=out_dir
+            )
+        elif config['anomalies']['method'] == 'rolling_std':
+            detect_anomalies_rolling_std(
+                df, time_column, value_column,
+                window_size=config['anomalies']['window_size'], 
+                threshold=config['anomalies']['threshold'], 
+                visualize_freq=config['visualize_freq'],
+                out_dir=out_dir    
+            )
+        else:
+            raise NotImplementedError

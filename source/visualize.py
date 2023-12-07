@@ -4,6 +4,46 @@ from tqdm import tqdm
 import os
 import os.path as osp
 import datetime
+import yaml
+from source.constants import TASK_COLUMNS
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_dir', type=str, default='data')
+parser.add_argument('--out_dir', type=str, default='data/results')
+parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
+parser.add_argument('--task', type=str, choices=['AD&P', 'C'], default='AD&P')
+
+def visualize_stl(original, trend, seasonal, resid, out_dir=None, figsize=(16,8)):
+
+    plt.figure(figsize=figsize)
+    plt.subplot(4,1,1)
+    plt.plot(original)
+    plt.title('Original Series', fontsize=16)
+    plt.xticks(rotation=90)
+
+    plt.subplot(4,1,2)
+    plt.plot(trend)
+    plt.title('Trend', fontsize=16)
+    plt.xticks(rotation=90)
+
+    plt.subplot(4,1,3)
+    plt.plot(seasonal)
+    plt.title('Seasonal', fontsize=16)
+    plt.xticks(rotation=90)
+
+    plt.subplot(4,1,4)
+    plt.plot(resid)
+    plt.title('Residual', fontsize=16)
+    plt.xticks(rotation=90)
+
+    plt.tight_layout()
+
+
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        plt.savefig(osp.join(out_dir, 'stl.png'), bbox_inches='tight')
+
 
 def visualize_ts(
         df, time_column, value_column, 
@@ -11,9 +51,10 @@ def visualize_ts(
         lower_bound=None, upper_bound=None,
         anomalies = None,
         outpath = None,
-        freq='D'
+        freq='D',
+        figsize=(16,12)
     ):
-    plt.figure(figsize=(16,12))
+    plt.figure(figsize=figsize)
     plt.subplots_adjust(left=0.05, right=0.95)  # Adjust left and right margins
     df[time_column] = pd.to_datetime(df[time_column])
     df = df.sort_values(by=time_column)
@@ -68,27 +109,20 @@ def visualize_ts(
     plt.close()
 
 if __name__ == "__main__":
-    TASK = 'C' #'AD&P'
-    DATA_DIR = f'/home/mpham/workspace/huawei-time-series/data/processed/{TASK}'
-
-    if TASK == 'AD&P':
-        time_column = 'timestamp'
-        value_column = 'kpi_value'
-        freq = 'D'
-    else:
-        time_column = 'date'
-        value_column = 'value'
-        freq = 'Y'
+    args = parser.parse_args()
     
+    time_column = TASK_COLUMNS[args.task]['time_column']
+    value_column = TASK_COLUMNS[args.task]['value_column']
 
-    filenames = os.listdir(DATA_DIR)
+    configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
+
+    filenames = os.listdir(args.data_dir)
     for filename in tqdm(filenames):
-        filepath = osp.join(DATA_DIR, filename)
+        filepath = osp.join(args.data_dir, filename)
         df = pd.read_csv(filepath)
-
         df[time_column] = pd.to_datetime(df[time_column])
-        
         filename = filename.split('.')[0]
+        config = configs[filename]
 
         if 'anomaly_label' in df.columns:
             anomalies = df.loc[df.anomaly_label == 1]
@@ -97,9 +131,9 @@ if __name__ == "__main__":
 
         visualize_ts(
             df,
-            freq = freq,
+            freq = config['visualize_freq'],
             anomalies = anomalies,
             time_column=time_column, 
             value_column=value_column,
-            outpath=f'/home/mpham/workspace/huawei-time-series/results/{TASK}/figures/{filename}_raw.png'
+            outpath=osp.join(args.out_dir, f'{filename}.png')
          )
