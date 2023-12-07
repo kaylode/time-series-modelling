@@ -1,0 +1,50 @@
+dataset_1:
+    freq: 15T
+dataset_2:
+    freq: 5T
+dataset_3:
+    freq: 5T
+dataset_4:
+    freq: 5T
+dataset_5:
+    freq: 5T
+dataset_6:
+    freq: 5T
+dataset_7:
+    freq: 5T
+dataset_8:
+    freq: 1H
+dataset_9:
+    freq: 5T
+dataset_10:
+    freq: 5T
+dataset_11:
+    freq: 5T
+dataset_12:
+    freq: 5T
+dataset_13:
+    freq: 1T
+dataset_100:
+    freq: 1T
+dataset_101:
+    freq: 1T
+dataset_102:
+    freq: 1T
+dataset_103:
+    freq: 1T
+dataset_105:
+    freq: 1T
+dataset_106:
+    freq: null
+dataset_201:
+    freq: 5T
+dataset_202:
+    freq: 5T
+dataset_203:
+    freq: 5T
+dataset_204:
+    freq: 5T
+dataset_205:
+    freq: 5T
+dataset_206:
+    freq: 1T
