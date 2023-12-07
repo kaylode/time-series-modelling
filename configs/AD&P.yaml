@@ -1,5 +1,6 @@
 dataset_1:
     freq: 15T
+    seasonality: 96
 dataset_2:
     freq: 5T
 dataset_3:
