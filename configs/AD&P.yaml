@@ -1,51 +1,87 @@
 dataset_1:
     freq: 15T
     seasonality: 96
+    visualize_freq: D
+    anomalies: 
+      method: stl
+      threshold: 3
 dataset_2:
     freq: 5T
+    visualize_freq: D
+    anomalies:
+      method: rolling_std
+      window_size: 12
+      threshold: 3
 dataset_3:
     freq: 5T
+    visualize_freq: D
+    anomalies:
+      method: rolling_mean
+      window_size: 12
+      threshold: 3
 dataset_4:
     freq: 5T
+    visualize_freq: D
 dataset_5:
     freq: 5T
+    visualize_freq: D
 dataset_6:
     freq: 5T
+    visualize_freq: D
 dataset_7:
     freq: 5T
+    visualize_freq: D
 dataset_8:
     freq: 1H
+    visualize_freq: m
 dataset_9:
     freq: 5T
+    visualize_freq: D
 dataset_10:
     freq: 5T
+    visualize_freq: D
 dataset_11:
     freq: 5T
+    visualize_freq: D
 dataset_12:
     freq: 5T
+    visualize_freq: D
 dataset_13:
     freq: 1T
+    visualize_freq: D
 dataset_100:
     freq: 1T
+    visualize_freq: D
 dataset_101:
     freq: 1T
+    visualize_freq: D
 dataset_102:
     freq: 1T
+    visualize_freq: D
 dataset_103:
     freq: 1T
+    visualize_freq: D
 dataset_105:
     freq: 1T
+    visualize_freq: D
 dataset_106:
     freq: null
+    visualize_freq: D
 dataset_201:
     freq: 5T
+    visualize_freq: D
 dataset_202:
     freq: 5T
+    visualize_freq: D
 dataset_203:
     freq: 5T
+    visualize_freq: D
 dataset_204:
     freq: 5T
+    visualize_freq: D
 dataset_205:
     freq: 5T
+    visualize_freq: D
 dataset_206:
     freq: 1T
+    visualize_freq: D
