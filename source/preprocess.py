@@ -55,7 +55,7 @@ def missing_timestamps(df, time_column, freq='D'):
     new_df = new_df.sort_values(by=time_column)
     date_range = pd.date_range(
         new_df[time_column].min(), 
-        new_df[time_column].max()+datetime.timedelta(days=1), 
+        new_df[time_column].max(), 
         freq=freq
     )
     missing_timestamps = []
