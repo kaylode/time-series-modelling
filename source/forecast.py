@@ -1,7 +1,7 @@
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+import pmdarima as pm
 
-from statsmodels.tsa.stattools import adfuller
 
 from prophet import Prophet
 
@@ -24,11 +24,9 @@ parser.add_argument('--data_dir', type=str, default='data')
 parser.add_argument('--out_dir', type=str, default='data/results')
 parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
 
-
-
 def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, seasonal_lag=None):
 
-    assert method in ['none', 'diff', 'diff2', 'seasonal_diff'], f"Invalid method: {method}"
+    assert method in ['none', 'diff', 'diff2', 'seasonal_diff', 'norm'], f"Invalid method: {method}"
 
     def normalize_ts(df, value_column, mu=None, sigma=None):
         if mu is None:
@@ -50,6 +48,7 @@ def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, se
         engineered_values = norm_values.diff(periods=seasonal_lag)
     elif method == 'none':
         engineered_values = df[value_column]
+        mu, sigma = None, None
     elif method == 'norm':
         engineered_values = norm_values
     else:
@@ -59,11 +58,6 @@ def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, se
 
 def fit_arima(df, model_configs={}, use_sarimax=False):
 
-    # Check if time series is stationary
-    result = adfuller(df.dropna())
-    print('ADF Statistic: %f' % result[0])
-    print('p-value: %f' % result[1])
-
     # Fit ARIMA model
     if use_sarimax:
         model = SARIMAX(df.dropna(), **model_configs)
@@ -72,6 +66,36 @@ def fit_arima(df, model_configs={}, use_sarimax=False):
     fit_model = model.fit()
     return fit_model
 
+
+def fit_auto_arima(df, model_configs={}):
+    model_config.update({
+        'seasonal': False,  # No Seasonality for standard ARIMA
+        'trace': False,  #logs 
+        'error_action': 'warn',  #shows errors ('ignore' silences these)
+        'suppress_warnings': True 
+    })
+    model = pm.auto_arima(
+        df.dropna(), 
+        **model_configs
+    )
+
+    print(model.summary())
+    return model
+    
+    
+def predict_auto_arima(model, num_predictions=5):
+    fitted, confint = model.predict(n_periods=num_predictions, return_conf_int=True)
+    lower_bound = pd.Series(confint[:, 0], index=fitted.index)
+    upper_bound = pd.Series(confint[:, 1], index=fitted.index)
+    pred_df = pd.DataFrame({
+        'predicted_mean': fitted,
+        'lower y': lower_bound,
+        'upper y': upper_bound
+    })
+    
+    return pred_df
+
+
 def predict_arima(fit_model, num_predictions=5):
     predictions = fit_model.get_forecast(num_predictions)
     yhat = predictions.predicted_mean
@@ -79,7 +103,6 @@ def predict_arima(fit_model, num_predictions=5):
     pred_df = pd.merge(yhat.reset_index(), yhat_conf_int.reset_index(), on='index')
     pred_df = pred_df.set_index('index')
     return pred_df
-
 
 def fit_prophet(df, model_configs={}):
     model = Prophet(**model_configs)
@@ -95,25 +118,37 @@ def predict_prophet(model, num_predictions=5):
     
     return result.tail(num_predictions)
 
-def postprocess(norm_df, pred_df, sigma, mu):
-    last_index = norm_df.index[-1]
-    last_value = norm_df.iloc[-1]
-    pred_df.at[last_index, 'predicted_mean'] = last_value
-    pred_df.at[last_index, 'lower y'] = last_value
-    pred_df.at[last_index, 'upper y'] = last_value
-    pred_df = pred_df.sort_index()
-    pred_df = pred_df.cumsum()
-    pred_df = pred_df * sigma + mu
-    pred_df.drop(index=last_index, inplace=True)
+def postprocess(norm_df, pred_df, sigma=None, mu=None, cumsum=False):
+
+    if cumsum:
+        last_index = norm_df.index[-1]
+        last_value = norm_df.iloc[-1]
+        pred_df.at[last_index, 'predicted_mean'] = last_value
+        pred_df.at[last_index, 'lower y'] = last_value
+        pred_df.at[last_index, 'upper y'] = last_value
+        pred_df = pred_df.sort_index()
+        pred_df = pred_df.cumsum()
+        pred_df.drop(index=last_index, inplace=True)
+    
+    if sigma is not None and mu is not None:
+        pred_df = pred_df * sigma + mu
+
     return pred_df
 
-def validate(targets, predictions):
-    mse = mean_squared_error(targets, predictions)
-    mae = mean_absolute_error(targets, predictions)
-    return {
-        'mse': mse,
-        'mae': mae,
-    }
+
+def validate(actual, forecast):
+    mape = np.mean(np.abs(forecast - actual)/np.abs(actual))  # MAPE
+    me = np.mean(forecast - actual)             # ME
+    mae = np.mean(np.abs(forecast - actual))    # MAE
+    mpe = np.mean((forecast - actual)/actual)   # MPE
+    rmse = np.mean((forecast - actual)**2)**.5  # RMSE
+    corr = np.corrcoef(forecast, actual)[0,1]   # corr
+
+    return({
+        'mape':mape, 'me':me, 'mae': mae, 
+        'mpe': mpe, 'rmse':rmse,  
+        'corr':corr, 
+    })
 
 
 def fit_cv(
@@ -146,7 +181,6 @@ def fit_cv(
         ) = feature_engineering(
             train_df, value_column, method=feature_method, seasonal_lag=seasonal_lag
         )
-        # engineered_test, _, _ = feature_engineering(test_df, mu=mu, sigma=sigma)
 
         if method in ['sarimax', 'arima']:
             # Fit model
@@ -157,19 +191,27 @@ def fit_cv(
             model = fit_arima(engineered_train, model_configs, use_sarimax=use_sarimax)
             # Make predictions
             pred_df = predict_arima(model, num_predictions=num_predictions)
-            # Postprocess prediction
-            predictions = postprocess(norm_train, pred_df, sigma, mu)
+        
+        elif method == 'auto_arima':
+            model = fit_auto_arima(engineered_train, model_configs)
+            pred_df = predict_auto_arima(model, num_predictions=num_predictions)
+        
         elif method == 'prophet':
-
             engineered_train = engineered_train.reset_index()
             engineered_train = engineered_train.rename(columns={time_column: 'ds', value_column: 'y'})
             # Fit model
             model = fit_prophet(engineered_train, model_configs)
             # Make predictions
-            predictions = predict_prophet(model, num_predictions=num_predictions)
+            pred_df = predict_prophet(model, num_predictions=num_predictions)
         else:
             raise NotImplementedError
 
+        # Postprocess prediction
+        predictions = postprocess(
+            norm_train, pred_df, sigma, mu,
+            cumsum=feature_method in ['diff', 'diff2', 'seasonal_diff'],
+        )
+        
         # Visualize predictions
         visualize_ts(
             train_df.reset_index(), time_column, value_column, 
@@ -190,10 +232,9 @@ def fit_cv(
         )
         scores.append(score)
 
-    avg_score = {
-        'mse': get_mean_std([score['mse'] for score in scores]),
-        'mae': get_mean_std([score['mae'] for score in scores]),
-    }
+    avg_score = {}
+    for metric in scores[0].keys():
+        avg_score[metric] = get_mean_std([score[metric] for score in scores])
 
     return avg_score
 
