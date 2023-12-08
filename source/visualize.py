@@ -49,11 +49,13 @@ def visualize_stl(original, trend, seasonal, resid, out_dir=None, figsize=(16,8)
 def visualize_ts(
         df, time_column, value_column, 
         predictions=None, 
+        targets = None,
         lower_bound=None, upper_bound=None,
         anomalies = None,
         outpath = None,
         freq='D',
-        figsize=(16,12)
+        figsize=(16,12),
+        zoom=4
     ):
     plt.figure(figsize=figsize)
     plt.subplots_adjust(left=0.05, right=0.95)  # Adjust left and right margins
@@ -94,6 +96,16 @@ def visualize_ts(
         if lower_bound is not None and upper_bound is not None:
             plt.fill_between(forecast_timestamps, lower_bound, upper_bound, color='g', alpha=0.1)
 
+        # Zoom into the forecasted region
+        plt.xlim([
+            df[time_column].max()-timestamp_diff_dt*(forecast_steps*zoom), 
+            df[time_column].max()+timestamp_diff_dt*(forecast_steps*2)
+        ])
+
+    if targets is not None:
+        plt.plot(targets[time_column], targets[value_column], color='r')
+
+
     if anomalies is not None:
         plt.scatter(
             anomalies[time_column], 
@@ -116,6 +128,7 @@ def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir
 
     # Calculate the autocorrelation function
     fig = plot_acf(tmp_df[value_column], lags=lags)
+    plt.title(f'Lags: {lags}')
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'acf.png'), bbox_inches='tight')
@@ -125,6 +138,7 @@ def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir
 
     # Calculate the partial autocorrelation function
     fig = plot_pacf(tmp_df[value_column], lags=lags)
+    plt.title(f'Lags: {lags}')
     if out_dir is not None:
         plt.savefig(osp.join(out_dir, 'pacf.png'), bbox_inches='tight')
     else:
