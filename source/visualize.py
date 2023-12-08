@@ -8,12 +8,37 @@ import yaml
 from source.constants import TASK_COLUMNS
 import argparse
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.stattools import adfuller
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
 parser.add_argument('--out_dir', type=str, default='data/results')
 parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
 parser.add_argument('--task', type=str, choices=['AD&P', 'C'], default='AD&P')
+
+def visualize_rollings(
+        df, time_column, value_column,
+        window_size, out_dir=None, figsize=(16,8)
+    ):
+    tmp_df = df.copy()
+    tmp_df[time_column] = pd.to_datetime(tmp_df[time_column])
+    tmp_df = tmp_df.set_index(time_column)
+    tmp_df = tmp_df[value_column]
+
+    # Visualize rolling mean and std
+    rolling_mean = tmp_df.rolling(window=window_size).mean()
+    rolling_std = tmp_df.rolling(window=window_size).std()
+    plt.figure(figsize=figsize)
+    plt.plot(tmp_df, color='blue', label='Original')
+    plt.plot(rolling_mean, color='red', label='Rolling Mean')
+    plt.plot(rolling_std, color='black', label='Rolling Std')
+    plt.legend(loc='best')
+
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        plt.savefig(osp.join(out_dir, 'rolling_stats.png'), bbox_inches='tight')
+    plt.clf()
+    plt.close()
 
 def visualize_stl(original, trend, seasonal, resid, out_dir=None, figsize=(16,8)):
 
@@ -45,6 +70,13 @@ def visualize_stl(original, trend, seasonal, resid, out_dir=None, figsize=(16,8)
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'stl.png'), bbox_inches='tight')
 
+    plt.close()
+
+def check_stationary(df, value_column):
+    # Check if time series is stationary using Augmented Dickey-Fuller test
+    result = adfuller(df[value_column].dropna())
+    return result # lower mean stastically significant, reject null hypothesis
+
 
 def visualize_ts(
         df, time_column, value_column, 
@@ -55,7 +87,8 @@ def visualize_ts(
         outpath = None,
         freq='D',
         figsize=(16,12),
-        zoom=4
+        zoom=4,
+        check_stationarity=False
     ):
     plt.figure(figsize=figsize)
     plt.subplots_adjust(left=0.05, right=0.95)  # Adjust left and right margins
@@ -83,8 +116,14 @@ def visualize_ts(
     for dt in date_range:
         plt.axvline(dt, color='k', linestyle='--', alpha=0.5)
     
+    title = ""
+    if check_stationarity:
+        sta = check_stationary(df, value_column)
+        title += f'p-value: {sta[1]}\n'
+
     timestamp_diff_dt = df[time_column].iloc[1] - df[time_column].iloc[0]
-    plt.title(f'Time Difference: {timestamp_diff_dt}')
+    title += f'Frequency: {freq}\n'
+    
     if predictions is not None:
         forecast_steps = len(predictions)
         forecast_timestamps = [
@@ -118,12 +157,15 @@ def visualize_ts(
             color='r', marker='D'
         )
 
+    plt.title(title)
+
     if outpath is not None:
         dirname = os.path.dirname(outpath)
         if not os.path.exists(dirname):
             os.makedirs(dirname, exist_ok=True)
         plt.savefig(outpath)
-        
+    
+    plt.clf()
     plt.close()
 
 def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir=None):
@@ -131,23 +173,22 @@ def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir
     tmp_df[time_column] = pd.to_datetime(tmp_df[time_column])
     tmp_df = tmp_df.set_index(time_column)
 
-    # Calculate the autocorrelation function
-    fig = plot_acf(tmp_df[value_column], lags=lags)
+    # Calculate the autocorrelation function and partial autocorrelation function
+    fig, ax = plt.subplots(2,1, figsize=(16,8))
+
+    plot_acf(tmp_df[value_column], lags=lags, ax=ax[0])
+    plot_pacf(tmp_df[value_column], lags=lags, ax=ax[1])
+    ax[0].set_title('Autocorrelation')
+    ax[1].set_title('Partial Autocorrelation')
     plt.title(f'Lags: {lags}')
+    plt.tight_layout()
+
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
-        plt.savefig(osp.join(out_dir, 'acf.png'), bbox_inches='tight')
+        plt.savefig(osp.join(out_dir, 'autocorrelation.png'), bbox_inches='tight')
     else:
         plt.show()
-    plt.close()
-
-    # Calculate the partial autocorrelation function
-    fig = plot_pacf(tmp_df[value_column], lags=lags)
-    plt.title(f'Lags: {lags}')
-    if out_dir is not None:
-        plt.savefig(osp.join(out_dir, 'pacf.png'), bbox_inches='tight')
-    else:
-        plt.show()
+    plt.clf()
     plt.close()
 
 
@@ -159,7 +200,8 @@ if __name__ == "__main__":
 
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
-    filenames = os.listdir(args.data_dir)
+    filenames = sorted(os.listdir(args.data_dir))
+
     for filename in tqdm(filenames):
         filepath = osp.join(args.data_dir, filename)
         df = pd.read_csv(filepath)
@@ -178,14 +220,27 @@ if __name__ == "__main__":
             anomalies = anomalies,
             time_column=time_column, 
             value_column=value_column,
-            outpath=osp.join(args.out_dir, 'original', f'{filename}.png')
+            check_stationarity=True,
+            outpath=osp.join(args.out_dir, 'original', f'{filename}.png'),
         )
 
         visualize_autocorrelations(
             df,
             time_column=time_column, 
             value_column=value_column,
-            lags=config.get('seasonality', None),
-            out_dir=osp.join(args.out_dir, 'autocorrelations', filename)
+            lags=config.get('seasonality', 288),
+            out_dir=osp.join(args.out_dir, 'stats', filename)
         )
 
+        visualize_rollings(
+            df,
+            time_column=time_column,
+            value_column=value_column,
+            window_size=config.get('seasonality', 288),
+            out_dir=osp.join(args.out_dir, 'stats', filename)
+        )
+
+        # Clear memory of matplotlib
+        plt.cla()
+        plt.clf()
+        plt.close('all')
