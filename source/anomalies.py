@@ -239,4 +239,5 @@ if __name__ == '__main__':
             value_column, 
             anomalies
         )
-        imputed_df.to_csv(osp.join(out_dir, 'imputed.csv'), index=False)
+        os.makedirs(osp.join(OUT_DIR, 'imputed'), exist_ok=True)
+        imputed_df.to_csv(osp.join(OUT_DIR, 'imputed', filename), index=False)
