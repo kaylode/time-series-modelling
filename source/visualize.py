@@ -7,6 +7,7 @@ import datetime
 import yaml
 from source.constants import TASK_COLUMNS
 import argparse
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
@@ -108,6 +109,29 @@ def visualize_ts(
         
     plt.close()
 
+def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir=None):
+    tmp_df = df.copy()
+    tmp_df[time_column] = pd.to_datetime(tmp_df[time_column])
+    tmp_df = tmp_df.set_index(time_column)
+
+    # Calculate the autocorrelation function
+    fig = plot_acf(tmp_df[value_column], lags=lags)
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        plt.savefig(osp.join(out_dir, 'acf.png'), bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+    # Calculate the partial autocorrelation function
+    fig = plot_pacf(tmp_df[value_column], lags=lags)
+    if out_dir is not None:
+        plt.savefig(osp.join(out_dir, 'pacf.png'), bbox_inches='tight')
+    else:
+        plt.show()
+    plt.close()
+
+
 if __name__ == "__main__":
     args = parser.parse_args()
     
@@ -135,5 +159,14 @@ if __name__ == "__main__":
             anomalies = anomalies,
             time_column=time_column, 
             value_column=value_column,
-            outpath=osp.join(args.out_dir, f'{filename}.png')
-         )
+            outpath=osp.join(args.out_dir, 'original', f'{filename}.png')
+        )
+
+        visualize_autocorrelations(
+            df,
+            time_column=time_column, 
+            value_column=value_column,
+            lags=config.get('seasonality', None),
+            out_dir=osp.join(args.out_dir, 'autocorrelations', filename)
+        )
+
