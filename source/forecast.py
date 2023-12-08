@@ -1,6 +1,8 @@
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 
+from prophet import Prophet
+
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from source.constants import TASK_COLUMNS
 from sklearn.model_selection import TimeSeriesSplit
@@ -45,6 +47,8 @@ def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, se
     elif method == 'seasonal_diff':
         engineered_values = norm_values.diff(periods=seasonal_lag)
     elif method == 'none':
+        engineered_values = df[value_column]
+    elif method == 'norm':
         engineered_values = norm_values
     else:
         raise NotImplementedError
@@ -70,6 +74,21 @@ def predict_arima(fit_model, num_predictions=5):
     pred_df = pd.merge(yhat.reset_index(), yhat_conf_int.reset_index(), on='index')
     pred_df = pred_df.set_index('index')
     return pred_df
+
+
+def fit_prophet(df, model_configs={}):
+    model = Prophet(**model_configs)
+    model.fit(df)
+    return model
+
+def predict_prophet(model, num_predictions=5):
+    future = model.make_future_dataframe(periods=num_predictions)
+    predictions = model.predict(future)
+    result = predictions[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+    result = result.set_index('ds')
+    result = result.rename(columns={'yhat': 'predicted_mean', 'yhat_lower': 'lower y', 'yhat_upper': 'upper y'})
+    
+    return result.tail(num_predictions)
 
 def postprocess(norm_df, pred_df, sigma, mu):
     last_index = norm_df.index[-1]
@@ -114,7 +133,6 @@ def fit_cv(
     # Split the time series using TimeSeriesSplit
     for fold_id, (train_index, test_index) in enumerate(tscv.split(df)):
         train_df, test_df = df.iloc[train_index], df.iloc[test_index]
-
         (
             norm_train, 
             engineered_train, 
@@ -125,14 +143,23 @@ def fit_cv(
         )
         # engineered_test, _, _ = feature_engineering(test_df, mu=mu, sigma=sigma)
 
-        # # Fit ARIMA model
-        model = fit_arima(engineered_train, model_configs)
+        if method == 'arima':
+            # Fit model
+            model = fit_arima(engineered_train, model_configs)
+            # Make predictions
+            pred_df = predict_arima(model, num_predictions=num_predictions)
+            # Postprocess prediction
+            predictions = postprocess(norm_train, pred_df, sigma, mu)
+        elif method == 'prophet':
 
-        # Make predictions
-        pred_df = predict_arima(model, num_predictions=num_predictions)
-
-        # Postprocess prediction
-        predictions = postprocess(norm_train, pred_df, sigma, mu)
+            engineered_train = engineered_train.reset_index()
+            engineered_train = engineered_train.rename(columns={time_column: 'ds', value_column: 'y'})
+            # Fit model
+            model = fit_prophet(engineered_train, model_configs)
+            # Make predictions
+            predictions = predict_prophet(model, num_predictions=num_predictions)
+        else:
+            raise NotImplementedError
 
         # Visualize predictions
         visualize_ts(
@@ -144,11 +171,14 @@ def fit_cv(
             lower_bound=predictions['lower y'],
             upper_bound=predictions['upper y'],
             figsize=(16,4),
-            zoom=20
+            zoom=30
         )
 
         # Evaluate the model
-        score = validate(test_df[value_column].values, predictions['predicted_mean'].values)
+        score = validate(
+            test_df[value_column].values, 
+            predictions['predicted_mean'].values
+        )
         scores.append(score)
 
     avg_score = {
@@ -175,6 +205,10 @@ if __name__ == '__main__':
         filepath = osp.join(DATA_DIR, filename)
         file_prefix = filename.split('.')[0]
         config = configs[file_prefix]
+        
+        if 'forecast' not in config:
+            continue
+        
         model_config = config['forecast']
         df = pd.read_csv(filepath)
         df[time_column] = pd.to_datetime(df[time_column])
@@ -189,14 +223,10 @@ if __name__ == '__main__':
             feature_method=model_config['feature_method'],
             num_predictions=model_config['num_predictions'],
             model_configs=model_config['model_configs'],
-            seasonal_lag=config['seasonality'],
+            seasonal_lag=config.get('seasonality', None),
             visualize_freq=config['visualize_freq'],
             out_dir=out_dir
         )
 
         with open(osp.join(out_dir, 'metrics.json'), 'w') as f:
             json.dump(metrics, f)
-
-        break
-
-        
