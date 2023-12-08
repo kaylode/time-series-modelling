@@ -5,7 +5,6 @@ import pmdarima as pm
 
 from prophet import Prophet
 
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 from source.constants import TASK_COLUMNS
 from sklearn.model_selection import TimeSeriesSplit
 from source.visualize import visualize_ts
@@ -63,16 +62,15 @@ def fit_arima(df, model_configs={}, use_sarimax=False):
         model = SARIMAX(df.dropna(), **model_configs)
     else:
         model = ARIMA(df.dropna(), **model_configs)
-    fit_model = model.fit()
+    fit_model = model.fit()    
     return fit_model
 
 
 def fit_auto_arima(df, model_configs={}):
     model_config.update({
-        'seasonal': False,  # No Seasonality for standard ARIMA
-        'trace': False,  #logs 
+        'trace': True,  #logs 
         'error_action': 'warn',  #shows errors ('ignore' silences these)
-        'suppress_warnings': True 
+        'suppress_warnings': False 
     })
     model = pm.auto_arima(
         df.dropna(), 
@@ -118,18 +116,15 @@ def predict_prophet(model, num_predictions=5):
     
     return result.tail(num_predictions)
 
-def postprocess(norm_df, pred_df, sigma=None, mu=None, cumsum=False):
+def postprocess(pred_df, last_index=None, last_value=None, sigma=None, mu=None, cumsum=False):
 
-    if cumsum:
-        last_index = norm_df.index[-1]
-        last_value = norm_df.iloc[-1]
-        pred_df.at[last_index, 'predicted_mean'] = last_value
-        pred_df.at[last_index, 'lower y'] = last_value
-        pred_df.at[last_index, 'upper y'] = last_value
+    if cumsum: #assuming df is already cumsumed
+        for col in pred_df.columns:
+            pred_df.at[last_index, col] = last_value
         pred_df = pred_df.sort_index()
         pred_df = pred_df.cumsum()
         pred_df.drop(index=last_index, inplace=True)
-    
+
     if sigma is not None and mu is not None:
         pred_df = pred_df * sigma + mu
 
@@ -182,6 +177,15 @@ def fit_cv(
             train_df, value_column, method=feature_method, seasonal_lag=seasonal_lag
         )
 
+        # Visualize input to debug
+        # visualize_ts(
+        #     engineered_train.dropna().reset_index(), time_column, 0, 
+        #     outpath=osp.join(out_dir, f'debug_{fold_id}.png'),
+        #     freq=visualize_freq,
+        #     figsize=(16,6),
+        #     check_stationarity=True
+        # )
+
         if method in ['sarimax', 'arima']:
             # Fit model
             if method == 'sarimax':
@@ -191,14 +195,15 @@ def fit_cv(
             model = fit_arima(engineered_train, model_configs, use_sarimax=use_sarimax)
             # Make predictions
             pred_df = predict_arima(model, num_predictions=num_predictions)
-        
+
         elif method == 'auto_arima':
             model = fit_auto_arima(engineered_train, model_configs)
             pred_df = predict_auto_arima(model, num_predictions=num_predictions)
         
         elif method == 'prophet':
             engineered_train = engineered_train.reset_index()
-            engineered_train = engineered_train.rename(columns={time_column: 'ds', value_column: 'y'})
+            engineered_train = engineered_train.rename(
+                columns={time_column: 'ds', engineered_train.columns[-1]: 'y'})
             # Fit model
             model = fit_prophet(engineered_train, model_configs)
             # Make predictions
@@ -206,9 +211,34 @@ def fit_cv(
         else:
             raise NotImplementedError
 
+        # Visualize fitted model
+        # fitted_values = model.fittedvalues
+        # predictions = postprocess(
+        #     fitted_values.to_frame(), sigma=sigma, mu=mu,
+        #     last_index=norm_train.index[0],
+        #     last_value=norm_train.iloc[0],
+        #     cumsum=feature_method in ['diff', 'diff2', 'seasonal_diff'],
+        # )
+        # predictions = predictions.rename({0: value_column}, axis=1)
+        # visualize_ts(
+        #     predictions.reset_index(), time_column, value_column, 
+        #     outpath=osp.join(out_dir, f'fitted_{fold_id}.png'),
+        #     freq=visualize_freq,
+        #     targets=train_df.reset_index(),
+        #     figsize=(16,6),
+        # )
+
+        # Match index (sometimes the index is not datetime, possibly a bug somewhere)
+        if pred_df.index.dtype != 'datetime64[ns]':
+            assert pred_df.shape[0] == test_df.shape[0]
+            pred_df.index = pd.to_datetime(test_df.index)
+
+        # Visualize forecast
         # Postprocess prediction
         predictions = postprocess(
-            norm_train, pred_df, sigma, mu,
+            pred_df, sigma=sigma, mu=mu,
+            last_index=norm_train.index[-1],
+            last_value=norm_train.iloc[-1],
             cumsum=feature_method in ['diff', 'diff2', 'seasonal_diff'],
         )
         
@@ -222,7 +252,7 @@ def fit_cv(
             lower_bound=predictions['lower y'],
             upper_bound=predictions['upper y'],
             figsize=(16,4),
-            zoom=30
+            zoom=10
         )
 
         # Evaluate the model

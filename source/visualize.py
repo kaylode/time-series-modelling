@@ -16,6 +16,40 @@ parser.add_argument('--out_dir', type=str, default='data/results')
 parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
 parser.add_argument('--task', type=str, choices=['AD&P', 'C'], default='AD&P')
 
+def visualize_diff(df, time_column, value_column, periods, out_dir=None, figsize=(16,12)):
+    tmp_df = df.copy()
+    tmp_df[time_column] = pd.to_datetime(tmp_df[time_column])
+    tmp_df = tmp_df.set_index(time_column)
+    tmp_df = tmp_df[value_column]
+
+    # Visualize 1st differencing
+    diff = tmp_df.diff().dropna()
+    plt.figure(figsize=figsize)
+    plt.subplot(3,1,1)
+    plt.plot(diff, color='blue', label='1st Differencing')
+    plt.title('1st Differencing')
+
+    # Visualize 2st differencing
+    diff2 = diff.diff().dropna()
+    plt.subplot(3,1,2)
+    plt.plot(diff2, color='blue', label='2nd Differencing')
+    plt.title('2nd Differencing')
+
+    # Visualize seasonal differencing
+    seasonal_diff = tmp_df.diff(periods=periods).dropna()
+    plt.subplot(3,1,3)
+    plt.plot(seasonal_diff, color='blue', label='Seasonal Differencing')
+    plt.title('Seasonal Differencing')
+
+    plt.legend(loc='best')
+
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        plt.savefig(osp.join(out_dir, 'diff.png'), bbox_inches='tight')
+    plt.clf()
+    plt.close()
+
+
 def visualize_rollings(
         df, time_column, value_column,
         window_size, out_dir=None, figsize=(16,8)
@@ -88,13 +122,23 @@ def visualize_ts(
         freq='D',
         figsize=(16,12),
         zoom=4,
-        check_stationarity=False
+        check_stationarity=False,
+        plot_legend_labels={
+            'df': 'Original', 
+            'predictions': 'Predictions', 
+            'targets': 'Targets', 
+            'anomalies': 'Anomalies'
+        }
     ):
     plt.figure(figsize=figsize)
     plt.subplots_adjust(left=0.05, right=0.95)  # Adjust left and right margins
     df[time_column] = pd.to_datetime(df[time_column])
     df = df.sort_values(by=time_column)
-    plt.plot(df[time_column], df[value_column])
+
+    if targets is not None:
+        plt.plot(targets[time_column], targets[value_column], color='orange', label=plot_legend_labels.get('targets', None))
+
+    plt.plot(df[time_column], df[value_column], color='b', label=plot_legend_labels.get('df', None))
 
     if freq == 'D':
         time_dt = datetime.timedelta(days=1)
@@ -130,7 +174,7 @@ def visualize_ts(
             df[time_column].max()+timestamp_diff_dt*i for i in range(1, forecast_steps+1)
         ]
 
-        plt.plot(forecast_timestamps, predictions, color='g')
+        plt.plot(forecast_timestamps, predictions, color='g', label=plot_legend_labels.get('predictions', None))
 
         if lower_bound is not None and upper_bound is not None:
             plt.fill_between(forecast_timestamps, lower_bound, upper_bound, color='g', alpha=0.1)
@@ -146,19 +190,16 @@ def visualize_ts(
             max(df[value_column].max(), predictions.max())+1
         ])
 
-    if targets is not None:
-        plt.plot(targets[time_column], targets[value_column], color='r')
-
-
     if anomalies is not None:
         plt.scatter(
             anomalies[time_column], 
             anomalies[value_column], 
-            color='r', marker='D'
+            color='r', marker='D',
+            label=plot_legend_labels.get('anomalies', None)
         )
 
     plt.title(title)
-
+    plt.legend(loc='best')
     if outpath is not None:
         dirname = os.path.dirname(outpath)
         if not os.path.exists(dirname):
@@ -237,6 +278,14 @@ if __name__ == "__main__":
             time_column=time_column,
             value_column=value_column,
             window_size=config.get('seasonality', 288),
+            out_dir=osp.join(args.out_dir, 'stats', filename)
+        )
+
+        visualize_diff(
+            df,
+            time_column=time_column,
+            value_column=value_column,
+            periods=config.get('seasonality', 288),
             out_dir=osp.join(args.out_dir, 'stats', filename)
         )
 
