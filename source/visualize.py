@@ -102,6 +102,11 @@ def visualize_ts(
             df[time_column].max()+timestamp_diff_dt*(forecast_steps*2)
         ])
 
+        plt.ylim([
+            min(df[value_column].min(), predictions.min())-1, 
+            max(df[value_column].max(), predictions.max())+1
+        ])
+
     if targets is not None:
         plt.plot(targets[time_column], targets[value_column], color='r')
 
