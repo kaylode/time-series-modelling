@@ -3,3 +3,4 @@ kneed
 gdown
 prophet
 tslearn
+pmdarima
