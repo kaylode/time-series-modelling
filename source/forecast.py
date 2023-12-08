@@ -1,97 +1,202 @@
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from source.constants import TASK_COLUMNS
+from sklearn.model_selection import TimeSeriesSplit
+from source.visualize import visualize_ts
+
+import os
+import os.path as osp
+from tqdm import tqdm
+import json
+import numpy as np
+import pandas as pd
+import yaml
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--data_dir', type=str, default='data')
+parser.add_argument('--out_dir', type=str, default='data/results')
+parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
 
 
-def feature_engineering(df):
-    mu, sigma = normalize_ts(df)
 
-    df['kpi_value_diff'] = df['kpi_value_norm'].diff()
-    df['kpi_value_diff2'] = df['kpi_value_diff'].diff()
+def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, seasonal_lag=None):
 
-    seasonal_lag = 96 # lag for exactly 24 hours
-    df['kpi_value_seasonal_diff'] = df['kpi_value_norm'].diff(periods=seasonal_lag)
+    assert method in ['none', 'diff', 'diff2', 'seasonal_diff'], f"Invalid method: {method}"
 
+    def normalize_ts(df, value_column, mu=None, sigma=None):
+        if mu is None:
+            mu = np.mean(df[value_column])
+        if sigma is None:
+            sigma = np.std(df[value_column])
+    
+        norm_values = df.apply(lambda x: (x[value_column] - mu) / sigma, axis=1)
+        return norm_values, mu, sigma
 
-def perform_adf_test(series):
-    result = adfuller(series)
+    norm_values, mu, sigma = normalize_ts(df, value_column, mu, sigma)
+
+    if method == 'diff':
+        engineered_values = norm_values.diff()
+    elif method == 'diff2':
+        engineered_values = norm_values.diff()
+        engineered_values = engineered_values.diff()
+    elif method == 'seasonal_diff':
+        engineered_values = norm_values.diff(periods=seasonal_lag)
+    elif method == 'none':
+        engineered_values = norm_values
+    else:
+        raise NotImplementedError
+
+    return norm_values, engineered_values, mu, sigma
+
+def fit_arima(df, model_configs={}):
+
+    # Check if time series is stationary
+    result = adfuller(df.dropna())
     print('ADF Statistic: %f' % result[0])
     print('p-value: %f' % result[1])
 
-
-def search_arima(df):
-    perform_adf_test(df['kpi_value_seasonal_diff'].dropna())
-    plot_pacf(df['kpi_value_seasonal_diff'])
-    plot_acf(df['kpi_value_seasonal_diff'])
-
-
-
-def fit_arima(df):
-    p = 1
-    d = 1
-    q = 1
-
-    order = (p, d, q)  # Replace p, d, q with appropriate values
-    model = ARIMA(df['kpi_value_diff'].dropna(), order=order)
+    # Fit ARIMA model
+    model = ARIMA(df.dropna(), **model_configs)
     fit_model = model.fit()
     return fit_model
 
-def predict_arima(df, fit_model):
-    predictions = fit_model.get_forecast(5)
+def predict_arima(fit_model, num_predictions=5):
+    predictions = fit_model.get_forecast(num_predictions)
     yhat = predictions.predicted_mean
     yhat_conf_int = predictions.conf_int(alpha=0.05)
     pred_df = pd.merge(yhat.reset_index(), yhat_conf_int.reset_index(), on='index')
     pred_df = pred_df.set_index('index')
-    pred_df
+    return pred_df
 
-    yhat[2852] = df['kpi_value_norm'].iloc[2852]
-    yhat = yhat.sort_index()
-    yhat_cumsum = yhat.cumsum()
-    yhat_ori = yhat_cumsum * sigma + mu
+def postprocess(norm_df, pred_df, sigma, mu):
+    last_index = norm_df.index[-1]
+    last_value = norm_df.iloc[-1]
+    pred_df.at[last_index, 'predicted_mean'] = last_value
+    pred_df.at[last_index, 'lower y'] = last_value
+    pred_df.at[last_index, 'upper y'] = last_value
+    pred_df = pred_df.sort_index()
+    pred_df = pred_df.cumsum()
+    pred_df = pred_df * sigma + mu
+    pred_df.drop(index=last_index, inplace=True)
+    return pred_df
+
+def validate(targets, predictions):
+    mse = mean_squared_error(targets, predictions)
+    mae = mean_absolute_error(targets, predictions)
+    return {
+        'mse': mse,
+        'mae': mae,
+    }
 
 
-    mse = mean_squared_error(test['kpi_value'], predictions)
-    print(f'Mean Squared Error: {mse}')
+def fit_cv(
+        df, time_column, value_column, 
+        n_splits = 5, num_predictions=5, model_configs={}, 
+        method='arima', seasonal_lag=None, feature_method='diff',
+        visualize_freq='D', out_dir='data/results'
+    ):
+    
+    def get_mean_std(scores):
+        return (
+            np.mean(scores), \
+            np.std(scores)
+        )
+    
+    tscv = TimeSeriesSplit(n_splits=n_splits, test_size=num_predictions)
+    scores = []
 
+    df = df.sort_values(by=time_column)
+    df = df.set_index(time_column)
 
-def fit_cv(df):
-    # Assume df is your DataFrame with time series data
-    # Each row should have a timestamp, kpi_value, and an identifier for the time series (e.g., 'id')
+    # Split the time series using TimeSeriesSplit
+    for fold_id, (train_index, test_index) in enumerate(tscv.split(df)):
+        train_df, test_df = df.iloc[train_index], df.iloc[test_index]
 
-    # Initialize TimeSeriesSplit with the number of splits (folds) you want
-    n_splits = 5
-    tscv = TimeSeriesSplit(n_splits=n_splits)
+        (
+            norm_train, 
+            engineered_train, 
+            mu, 
+            sigma
+        ) = feature_engineering(
+            train_df, value_column, method=feature_method, seasonal_lag=seasonal_lag
+        )
+        # engineered_test, _, _ = feature_engineering(test_df, mu=mu, sigma=sigma)
 
-    # Placeholder for metrics
-    mse_scores = []
+        # # Fit ARIMA model
+        model = fit_arima(engineered_train, model_configs)
 
+        # Make predictions
+        pred_df = predict_arima(model, num_predictions=num_predictions)
 
-    # Iterate through each time series
-    for id, group_df in df.groupby('id'):
-        # Split the time series using TimeSeriesSplit
-        for train_index, test_index in tscv.split(group_df):
-            train, test = group_df.iloc[train_index], group_df.iloc[test_index]
+        # Postprocess prediction
+        predictions = postprocess(norm_train, pred_df, sigma, mu)
 
-            # Extract features and target variables
-            X_train, y_train = train[['timestamp']], train['kpi_value']
-            X_test, y_test = test[['timestamp']], test['kpi_value']
+        # Visualize predictions
+        visualize_ts(
+            train_df.reset_index(), time_column, value_column, 
+            outpath=osp.join(out_dir, f'predict_{fold_id}.png'),
+            freq=visualize_freq,
+            targets=test_df.reset_index(),
+            predictions=predictions['predicted_mean'],
+            lower_bound=predictions['lower y'],
+            upper_bound=predictions['upper y'],
+            figsize=(16,4),
+            zoom=20
+        )
 
-            import pdb; pdb.set_trace()
+        # Evaluate the model
+        score = validate(test_df[value_column].values, predictions['predicted_mean'].values)
+        scores.append(score)
 
-            # Replace the following with your chosen model
-            # model = ExponentialSmoothing(y_train)
-            # model_fit = model.fit()
+    avg_score = {
+        'mse': get_mean_std([score['mse'] for score in scores]),
+        'mae': get_mean_std([score['mae'] for score in scores]),
+    }
 
-            # # Make predictions
-            # y_pred = model_fit.predict(start=test.index[0], end=test.index[-1])
+    return avg_score
 
-            # # Evaluate the model
-            # mse = mean_squared_error(y_test, y_pred)
-            # mse_scores.append(mse)
+if __name__ == '__main__':
 
-    # Calculate the average MSE across all folds
-    mean_mse = np.mean(mse_scores)
-    std_mse = np.std(mse_scores)
-    return mean_mse, std_mse
+    args = parser.parse_args()
+    DATA_DIR = args.data_dir
+    OUT_DIR = args.out_dir
+    task = 'AD&P'
+    time_column = TASK_COLUMNS[task]['time_column']
+    value_column = TASK_COLUMNS[task]['value_column']
+
+    # load yaml file
+    configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
+
+    filenames = sorted(os.listdir(DATA_DIR))
+    for filename in tqdm(filenames):
+        filepath = osp.join(DATA_DIR, filename)
+        file_prefix = filename.split('.')[0]
+        config = configs[file_prefix]
+        model_config = config['forecast']
+        df = pd.read_csv(filepath)
+        df[time_column] = pd.to_datetime(df[time_column])
+
+        out_dir = osp.join(OUT_DIR, 'forecast', file_prefix)
+        os.makedirs(out_dir, exist_ok=True)
+
+        metrics = fit_cv(
+            df, time_column, value_column,
+            n_splits=model_config['n_splits'],
+            method=model_config['method'],
+            feature_method=model_config['feature_method'],
+            num_predictions=model_config['num_predictions'],
+            model_configs=model_config['model_configs'],
+            seasonal_lag=config['seasonality'],
+            visualize_freq=config['visualize_freq'],
+            out_dir=out_dir
+        )
+
+        with open(osp.join(out_dir, 'metrics.json'), 'w') as f:
+            json.dump(metrics, f)
+
+        break
+
+        
