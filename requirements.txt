@@ -2,3 +2,4 @@ tsfresh
 kneed
 gdown
 prophet
+tslearn
