@@ -1,14 +1,10 @@
-import numpy as np
 import pandas as pd
 import os
 import os.path as osp
-import plotly.graph_objects as go
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from tqdm import tqdm
 from statsmodels.tsa.seasonal import STL
-from statsmodels.graphics.tsaplots import plot_acf
-
+import json
 from source.visualize import visualize_ts, visualize_stl
 from source.constants import TASK_COLUMNS
 import argparse
@@ -18,24 +14,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
 parser.add_argument('--out_dir', type=str, default='data/anomalies')
 parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
-
-
-
-def plot_acf_(df, outname=None):
-    # Assuming df is your DataFrame with 'timestamp' and 'kpi_value' columns
-    # Make sure 'timestamp' is in datetime format
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-
-    # Set 'timestamp' as the index
-    df = df.set_index('timestamp')
-
-    # Calculate the autocorrelation function
-    fig = plot_acf(df['kpi_value'])
-
-    if outname is not None:
-        plt.savefig(f'{outname}.png', bbox_inches='tight')
-    else:
-        plt.show()
 
 def detect_anomalies_rolling_mean(
         df, time_column, value_column,
@@ -75,6 +53,7 @@ def detect_anomalies_rolling_mean(
         anomalies=anomalies,
         figsize=(16,4)
     )
+    return anomalies
 
 def detect_anomalies_rolling_std(
         df, time_column, value_column,
@@ -112,6 +91,7 @@ def detect_anomalies_rolling_std(
         anomalies=anomalies,
         figsize=(16,4)
     )
+    return anomalies
 
 def detect_anomalies_stl(
         df, time_column, value_column, 
@@ -165,6 +145,21 @@ def detect_anomalies_stl(
         anomalies=anomalies,
         figsize=(16,4)
     )
+
+    return anomalies
+
+def impute_anomalies(df, value_column, anomalies):
+    # Impute new values for anomalies, using mean of the previous and next values
+
+    new_df = df.copy()
+    anomalies_idx = anomalies.index
+    for idx in anomalies_idx:
+        if 0 < idx < len(new_df) - 1:  # Check if index is within the valid range
+            left_value = new_df.loc[idx - 1, value_column]
+            right_value = new_df.loc[idx + 1, value_column]
+            mean_value = (left_value + right_value) / 2.0
+            new_df.at[idx, value_column] = mean_value
+    return new_df
    
 if __name__ == '__main__':
 
@@ -178,7 +173,7 @@ if __name__ == '__main__':
     # load yaml file
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
-    filenames = ['dataset_1.csv', 'dataset_2.csv', 'dataset_3.csv'] #os.listdir(DATA_DIR)
+    filenames = sorted(os.listdir(DATA_DIR))
     for filename in tqdm(filenames):
         filepath = osp.join(DATA_DIR, filename)
         file_prefix = filename.split('.')[0]
@@ -188,8 +183,12 @@ if __name__ == '__main__':
 
         out_dir = osp.join(OUT_DIR, file_prefix)
         os.makedirs(out_dir, exist_ok=True)
+
+        if 'anomalies' not in config:
+            continue
+
         if config['anomalies']['method'] == 'stl':
-            detect_anomalies_stl(
+            anomalies = detect_anomalies_stl(
                 df, time_column, value_column,
                 period=config['seasonality'],
                 visualize_freq=config['visualize_freq'],
@@ -197,7 +196,7 @@ if __name__ == '__main__':
                 out_dir=out_dir
             )
         elif config['anomalies']['method'] == 'rolling_mean':
-            detect_anomalies_rolling_mean(
+            anomalies = detect_anomalies_rolling_mean(
                 df, time_column, value_column,
                 window_size=config['anomalies']['window_size'], 
                 threshold=config['anomalies']['threshold'], 
@@ -205,7 +204,7 @@ if __name__ == '__main__':
                 out_dir=out_dir
             )
         elif config['anomalies']['method'] == 'rolling_std':
-            detect_anomalies_rolling_std(
+            anomalies = detect_anomalies_rolling_std(
                 df, time_column, value_column,
                 window_size=config['anomalies']['window_size'], 
                 threshold=config['anomalies']['threshold'], 
@@ -214,3 +213,30 @@ if __name__ == '__main__':
             )
         else:
             raise NotImplementedError
+        
+        # If data has labels, try evaluating the anomaly detection method
+        if 'anomaly_label' in df.columns:
+            target_anomalies = df.loc[df.anomaly_label == 1]
+
+            # Compute precision, recall, and F1 score
+            true_positives = len(anomalies.merge(target_anomalies))
+            false_positives = len(anomalies) - true_positives
+            false_negatives = len(target_anomalies) - true_positives
+            precision = true_positives / (true_positives + false_positives)
+            recall = true_positives / (true_positives + false_negatives)
+            f1_score = 2 * precision * recall / (precision + recall)
+
+            with open(osp.join(out_dir, 'metric.json'), 'w') as f:
+                json.dump({
+                    'precision': precision,
+                    'recall': recall,
+                    'f1_score': f1_score
+                }, f)
+
+        # Impute anomalies
+        imputed_df = impute_anomalies(
+            df, 
+            value_column, 
+            anomalies
+        )
+        imputed_df.to_csv(osp.join(out_dir, 'imputed.csv'), index=False)
