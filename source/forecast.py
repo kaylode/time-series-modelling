@@ -1,4 +1,6 @@
 from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
 from statsmodels.tsa.stattools import adfuller
 
 from prophet import Prophet
@@ -55,7 +57,7 @@ def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, se
 
     return norm_values, engineered_values, mu, sigma
 
-def fit_arima(df, model_configs={}):
+def fit_arima(df, model_configs={}, use_sarimax=False):
 
     # Check if time series is stationary
     result = adfuller(df.dropna())
@@ -63,7 +65,10 @@ def fit_arima(df, model_configs={}):
     print('p-value: %f' % result[1])
 
     # Fit ARIMA model
-    model = ARIMA(df.dropna(), **model_configs)
+    if use_sarimax:
+        model = SARIMAX(df.dropna(), **model_configs)
+    else:
+        model = ARIMA(df.dropna(), **model_configs)
     fit_model = model.fit()
     return fit_model
 
@@ -143,9 +148,13 @@ def fit_cv(
         )
         # engineered_test, _, _ = feature_engineering(test_df, mu=mu, sigma=sigma)
 
-        if method == 'arima':
+        if method in ['sarimax', 'arima']:
             # Fit model
-            model = fit_arima(engineered_train, model_configs)
+            if method == 'sarimax':
+                use_sarimax = True
+            else:
+                use_sarimax = False
+            model = fit_arima(engineered_train, model_configs, use_sarimax=use_sarimax)
             # Make predictions
             pred_df = predict_arima(model, num_predictions=num_predictions)
             # Postprocess prediction
