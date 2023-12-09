@@ -222,9 +222,9 @@ if __name__ == '__main__':
             true_positives = len(anomalies.merge(target_anomalies))
             false_positives = len(anomalies) - true_positives
             false_negatives = len(target_anomalies) - true_positives
-            precision = true_positives / (true_positives + false_positives)
-            recall = true_positives / (true_positives + false_negatives)
-            f1_score = 2 * precision * recall / (precision + recall)
+            precision = true_positives / (true_positives + false_positives + 0.00001)
+            recall = true_positives / (true_positives + false_negatives+ 0.00001)
+            f1_score = 2 * precision * recall / (precision + recall+ 0.00001)
 
             with open(osp.join(out_dir, 'metric.json'), 'w') as f:
                 json.dump({
