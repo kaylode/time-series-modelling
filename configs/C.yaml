@@ -3,9 +3,6 @@ cluster_method: kmeans  #[kmeans, tskmeans]
 model_configs:
   n_init: 10
   random_state: 42
-#   init: random
-#   max_iter: 300
-#   metric: dtw
 
 MRTSMPCSM4400CUSN:
     seasonality: 12
