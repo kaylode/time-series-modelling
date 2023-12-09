@@ -9,6 +9,9 @@ from source.constants import TASK_COLUMNS
 import argparse
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
+from sklearn.decomposition import PCA
+import numpy as np
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
@@ -232,6 +235,44 @@ def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir
     plt.clf()
     plt.close()
 
+"""
+VISUALIZATION FUNCTIONS FOR CLUSTERING TASK
+"""
+
+def plot_series_cluster(series, labels):
+    plot_count = math.ceil(math.sqrt(cluster_count))
+
+    fig, axs = plt.subplots(plot_count,plot_count,figsize=(25,25))
+    fig.suptitle('Clusters')
+    row_i=0
+    column_j=0
+    # For each label there is,
+    # plots every series with that label
+    for label in set(labels):
+        cluster = []
+        for i in range(len(labels)):
+                if(labels[i]==label):
+                    axs[row_i, column_j].plot(series[i],c="gray",alpha=0.4)
+                    cluster.append(series[i])
+        if len(cluster) > 0:
+            axs[row_i, column_j].plot(np.average(np.vstack(cluster),axis=0),c="red")
+        axs[row_i, column_j].set_title("Cluster "+str(row_i*som_y+column_j))
+        column_j+=1
+        if column_j%plot_count == 0:
+            row_i+=1
+            column_j=0
+            
+    plt.show()
+
+def visualize_clusters(features, labels, kmeans):
+    pca = PCA(2)
+    projected = pca.fit_transform(features)
+    centroids = kmeans.cluster_centers_
+    for i, pred in enumerate(labels):
+        plt.scatter(projected[i, 0], projected[i, 1], label=pred)
+    plt.scatter(centroids[:, 0], centroids[:, 1], c='black', s=200, alpha=0.5)
+    plt.legend()
+    plt.show()
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -243,7 +284,8 @@ if __name__ == "__main__":
 
     filenames = sorted(os.listdir(args.data_dir))
 
-    for filename in tqdm(filenames):
+    for filename in (pbar := tqdm(filenames)):
+        pbar.set_description(f"Processing {filename}")
         filepath = osp.join(args.data_dir, filename)
         df = pd.read_csv(filepath)
         df[time_column] = pd.to_datetime(df[time_column])
