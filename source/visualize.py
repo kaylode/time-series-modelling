@@ -177,21 +177,21 @@ def visualize_ts(
     title += f'Frequency: {freq}\n'
     
     if predictions is not None:
-        forecast_steps = len(predictions)
-        forecast_timestamps = [
-            df[time_column].max()+timestamp_diff_dt*i for i in range(1, forecast_steps+1)
-        ]
+        # forecast_steps = len(predictions)
+        # forecast_timestamps = [
+        #     df[time_column].max()+timestamp_diff_dt*i for i in range(1, forecast_steps+1)
+        # ]
 
-        plt.plot(forecast_timestamps, predictions, color='g', label=plot_legend_labels.get('predictions', None))
+        plt.plot(predictions, color='g', label=plot_legend_labels.get('predictions', None), alpha=0.7)
 
         if lower_bound is not None and upper_bound is not None:
-            plt.fill_between(forecast_timestamps, lower_bound, upper_bound, color='g', alpha=0.1)
+            plt.fill_between(predictions.index, lower_bound, upper_bound, color='g', alpha=0.1)
 
         # Zoom into the forecasted region
-        plt.xlim([
-            df[time_column].max()-timestamp_diff_dt*(forecast_steps*zoom), 
-            df[time_column].max()+timestamp_diff_dt*(forecast_steps*2)
-        ])
+        # plt.xlim([
+        #     df[time_column].max()-timestamp_diff_dt*(forecast_steps*zoom), 
+        #     df[time_column].max()+timestamp_diff_dt*(forecast_steps*2)
+        # ])
 
         plt.ylim([
             min(df[value_column].min(), predictions.min())-1, 
@@ -273,6 +273,7 @@ def visualize_series_cluster(series_df, out_dir):
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     fig.savefig(osp.join(out_dir, 'clusters.png'), bbox_inches='tight')
+    plt.cla()
     plt.clf()
     plt.close()
 
@@ -294,6 +295,7 @@ def visualize_pca(features, labels, centroids=None, out_dir=None):
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'pca.png'), bbox_inches='tight')
+    plt.cla()
     plt.clf()
     plt.close()
 
@@ -315,7 +317,7 @@ def visualize_elbow(sse, silhouette_coefficients, out_dir=None):
     if out_dir:
         plt.savefig(osp.join(out_dir, 'elbow.png'))
 
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(10, 7))
     plt.style.use("fivethirtyeight")
     plt.plot(range(2, num_series), silhouette_coefficients)
     plt.xticks(range(2, num_series))
@@ -324,6 +326,7 @@ def visualize_elbow(sse, silhouette_coefficients, out_dir=None):
     if out_dir:
         plt.savefig(osp.join(out_dir, 'silhouette.png'))
 
+    plt.cla()
     plt.clf()
     plt.close()
 
