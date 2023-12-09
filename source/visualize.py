@@ -1,16 +1,18 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 from tqdm import tqdm
 import os
 import os.path as osp
 import datetime
 import yaml
+import math
 from source.constants import TASK_COLUMNS
 import argparse
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.decomposition import PCA
-import numpy as np
+from kneed import KneeLocator
 
 
 parser = argparse.ArgumentParser()
@@ -111,7 +113,10 @@ def visualize_stl(original, trend, seasonal, resid, out_dir=None, figsize=(16,8)
 
 def check_stationary(df, value_column):
     # Check if time series is stationary using Augmented Dickey-Fuller test
-    result = adfuller(df[value_column].dropna())
+    try:
+        result = adfuller(df[value_column].dropna())
+    except ValueError:
+        result = (0,0)
     return result # lower mean stastically significant, reject null hypothesis
 
 
@@ -239,40 +244,91 @@ def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir
 VISUALIZATION FUNCTIONS FOR CLUSTERING TASK
 """
 
-def plot_series_cluster(series, labels):
-    plot_count = math.ceil(math.sqrt(cluster_count))
+def visualize_series_cluster(series_df, out_dir):
+    labels = series_df.cluster.unique()
+    num_clusters = len(set(labels))
+    plot_count = math.ceil(math.sqrt(num_clusters))
 
-    fig, axs = plt.subplots(plot_count,plot_count,figsize=(25,25))
+    fig = plt.figure(figsize=(25, 25))
     fig.suptitle('Clusters')
-    row_i=0
-    column_j=0
-    # For each label there is,
-    # plots every series with that label
-    for label in set(labels):
-        cluster = []
-        for i in range(len(labels)):
-                if(labels[i]==label):
-                    axs[row_i, column_j].plot(series[i],c="gray",alpha=0.4)
-                    cluster.append(series[i])
-        if len(cluster) > 0:
-            axs[row_i, column_j].plot(np.average(np.vstack(cluster),axis=0),c="red")
-        axs[row_i, column_j].set_title("Cluster "+str(row_i*som_y+column_j))
-        column_j+=1
-        if column_j%plot_count == 0:
-            row_i+=1
-            column_j=0
-            
-    plt.show()
 
-def visualize_clusters(features, labels, kmeans):
+    spec = gridspec.GridSpec(plot_count, plot_count, figure=fig)
+
+    for i, label in enumerate(set(labels)):
+        series_ids = series_df.loc[series_df.cluster == label].id.unique()
+        row_i, col_j = divmod(i, plot_count)
+        axs = fig.add_subplot(spec[row_i, col_j])
+
+        cluster = []
+        for sid in series_ids:
+            tmp_df = series_df.loc[series_df.id==sid]
+            axs.plot(tmp_df.value, c="gray", alpha=0.4)
+            cluster.append(tmp_df.value)
+        if len(cluster) > 0:
+            # caculate average
+            avg_df = pd.concat(cluster, axis=1).mean(axis=1)
+            axs.plot(avg_df, c="red")
+        axs.set_title("Cluster " + str(label))
+    # Adjust layout to prevent clipping of titles
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    fig.savefig(osp.join(out_dir, 'clusters.png'), bbox_inches='tight')
+    plt.clf()
+    plt.close()
+
+def visualize_pca(features, labels, centroids=None, out_dir=None):
     pca = PCA(2)
     projected = pca.fit_transform(features)
-    centroids = kmeans.cluster_centers_
-    for i, pred in enumerate(labels):
-        plt.scatter(projected[i, 0], projected[i, 1], label=pred)
-    plt.scatter(centroids[:, 0], centroids[:, 1], c='black', s=200, alpha=0.5)
+    unique_labels = list(set(labels))
+    for label in unique_labels:
+        projected_label = projected[labels == label]
+        plt.scatter(projected_label[:, 0], projected_label[:, 1], label=label)
+    if centroids is not None:
+        centroids = pca.transform(centroids)
+        plt.scatter(centroids[:, 0], centroids[:, 1], c='black', s=200, alpha=0.1, label='Centroids')
+    
+    plt.xlabel('Component 1')
+    plt.ylabel('Component 2')
     plt.legend()
-    plt.show()
+
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        plt.savefig(osp.join(out_dir, 'pca.png'), bbox_inches='tight')
+    plt.clf()
+    plt.close()
+
+def visualize_elbow(sse, silhouette_coefficients, out_dir=None):
+    num_series = len(sse) + 2
+    kl = KneeLocator(range(2, num_series), sse, curve="convex", direction="decreasing")
+    optimal_k = kl.elbow
+    
+    plt.figure(figsize=(10, 5))
+    plt.style.use("fivethirtyeight")
+    plt.plot(range(2, num_series), sse)
+    plt.xticks(range(2, num_series))
+    plt.xlabel("Number of Clusters")
+    plt.ylabel("SSE")
+
+    if optimal_k:
+        plt.vlines(optimal_k, plt.ylim()[0], plt.ylim()[1], linestyles="--")
+        plt.title(f"Optimal k: {optimal_k}")
+    if out_dir:
+        plt.savefig(osp.join(out_dir, 'elbow.png'))
+
+    plt.figure(figsize=(10, 5))
+    plt.style.use("fivethirtyeight")
+    plt.plot(range(2, num_series), silhouette_coefficients)
+    plt.xticks(range(2, num_series))
+    plt.xlabel("Number of Clusters")
+    plt.ylabel("Silhouette Coefficient")
+    if out_dir:
+        plt.savefig(osp.join(out_dir, 'silhouette.png'))
+
+    plt.clf()
+    plt.close()
+
+    return optimal_k
+
 
 if __name__ == "__main__":
     args = parser.parse_args()

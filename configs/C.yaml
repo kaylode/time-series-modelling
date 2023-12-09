@@ -1,8 +1,10 @@
+fe_method: norm
+cluster_method: tskmeans
 model_configs:
-#   init: random
   n_init: 10
-#   max_iter: 300
   random_state: 42
+#   init: random
+#   max_iter: 300
 #   metric: dtw
 
 MRTSMPCSM4400CUSN:
