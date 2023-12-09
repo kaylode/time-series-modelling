@@ -3,15 +3,22 @@ import os
 import os.path as osp
 import argparse
 import numpy as np
-import datetime
+import yaml
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
 parser.add_argument('--out_dir', type=str, default='data/processed')
-parser.add_argument('--task', type=str, choices=['AD&P', 'C'], default='ADP')
+parser.add_argument('--config_file', type=str, default='config.json')
+parser.add_argument('--task', type=str, choices=['AD&P', 'C'], default='AD&P')
 
-def adp_preprocess(df):
+def adp_preprocess(df, freq):
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
     result_df = df.sort_values(['timestamp'])
+    result_df = result_df.set_index('timestamp')
+    result_df = result_df.resample(freq).mean()
+    result_df.interpolate(limit_direction="both", inplace=True)
+    result_df = result_df.reset_index()
     return result_df
 
 def c_preprocess(all_df):
@@ -46,17 +53,21 @@ def c_preprocess(all_df):
 
 def run(args):
     os.makedirs(args.out_dir, exist_ok=True)
-    filenames = os.listdir(args.data_dir)
+    filenames = sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
     if args.task == 'C':
         all_df = []
 
-    for filename in filenames:
+    for filename in (pbar := tqdm(filenames)):
+        pbar.set_description(f"Processing {filename}")
         filepath = osp.join(args.data_dir, filename)
         df = pd.read_csv(filepath)
+        file_prefix = filename.split('.')[0]
+        config = configs[file_prefix]
 
-        if args.task == 'ADP':
-            df = adp_preprocess(df)
+        if args.task == 'AD&P':
+            df = adp_preprocess(df, config['freq'])
             df.to_csv(
                 osp.join(args.out_dir, filename), 
                 index=False
