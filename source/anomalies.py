@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from statsmodels.tsa.seasonal import STL
 import json
+import numpy as np
 from source.visualize import visualize_ts, visualize_stl
 from source.constants import TASK_COLUMNS
 import argparse
@@ -16,12 +17,13 @@ parser.add_argument('--out_dir', type=str, default='data/anomalies')
 parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
 
 def detect_anomalies_rolling_mean(
-        df, time_column, value_column,
+        _df, time_column, value_column,
         window_size=10, threshold=2.0, 
         out_dir=None, visualize_freq='D'
     ):
 
     # Compute rolling mean
+    df = _df.copy()
     df['rolling_mean'] = df[value_column].rolling(window=window_size).mean()
     diff_rolling_mean = df['rolling_mean'].diff()
 
@@ -56,10 +58,11 @@ def detect_anomalies_rolling_mean(
     return anomalies
 
 def detect_anomalies_rolling_std(
-        df, time_column, value_column,
+        _df, time_column, value_column,
         window_size, threshold=2.0, 
         out_dir=None, visualize_freq='D'
     ):
+    df = _df.copy()
     # Compute rolling standard deviation
     df['rolling_std'] = df[value_column].rolling(window=window_size).std()
     diff_rolling_std = df['rolling_std'].diff()
@@ -149,16 +152,17 @@ def detect_anomalies_stl(
     return anomalies
 
 def impute_anomalies(df, value_column, anomalies):
-    # Impute new values for anomalies, using mean of the previous and next values
-
+    # Impute new values for anomalies, 
+    # using mean of window before and after anomaly
     new_df = df.copy()
+
+    # Remove anomalies
     anomalies_idx = anomalies.index
     for idx in anomalies_idx:
-        if 0 < idx < len(new_df) - 1:  # Check if index is within the valid range
-            left_value = new_df.loc[idx - 1, value_column]
-            right_value = new_df.loc[idx + 1, value_column]
-            mean_value = (left_value + right_value) / 2.0
-            new_df.at[idx, value_column] = mean_value
+        new_df.at[idx, value_column] = np.nan
+
+    # Impute anomalies new values using interpolation
+    new_df[value_column] = new_df[value_column].interpolate(limit_direction="both")
     return new_df
    
 if __name__ == '__main__':
@@ -174,7 +178,8 @@ if __name__ == '__main__':
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
     filenames = sorted(os.listdir(DATA_DIR))
-    for filename in tqdm(filenames):
+for filename in (pbar := tqdm(filenames)):
+        pbar.set_description(f"Processing {filename}")
         filepath = osp.join(DATA_DIR, filename)
         file_prefix = filename.split('.')[0]
         config = configs[file_prefix]
