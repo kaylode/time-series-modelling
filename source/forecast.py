@@ -1,7 +1,7 @@
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import pmdarima as pm
-
+import matplotlib.pyplot as plt
 
 from prophet import Prophet
 
@@ -37,7 +37,6 @@ def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, se
         return norm_values, mu, sigma
 
     norm_values, mu, sigma = normalize_ts(df, value_column, mu, sigma)
-
     if method == 'diff':
         engineered_values = norm_values.diff()
     elif method == 'diff2':
@@ -63,6 +62,7 @@ def fit_arima(df, model_configs={}, use_sarimax=False):
     else:
         model = ARIMA(df.dropna(), **model_configs)
     fit_model = model.fit()    
+    # print(fit_model.summary())
     return fit_model
 
 
@@ -95,7 +95,8 @@ def predict_auto_arima(model, num_predictions=5):
 
 
 def predict_arima(fit_model, num_predictions=5):
-    predictions = fit_model.get_forecast(num_predictions)
+    fitted_values = fit_model.fittedvalues
+    predictions = fit_model.get_prediction(0, fitted_values.shape[0] + num_predictions)
     yhat = predictions.predicted_mean
     yhat_conf_int = predictions.conf_int(alpha=0.05)
     pred_df = pd.merge(yhat.reset_index(), yhat_conf_int.reset_index(), on='index')
@@ -116,15 +117,34 @@ def predict_prophet(model, num_predictions=5):
     
     return result.tail(num_predictions)
 
-def postprocess(pred_df, last_index=None, last_value=None, sigma=None, mu=None, cumsum=False):
+def postprocess(
+        pred_df, 
+        last_indexes=None, last_values=None, 
+        sigma=None, mu=None, 
+        cumsum=None, cumsum_periods=1
+    ):
 
+    # Reverse differencing
     if cumsum: #assuming df is already cumsumed
-        for col in pred_df.columns:
-            pred_df.at[last_index, col] = last_value
+        if last_indexes is not None and last_values is not None:
+            for col in pred_df.columns:
+                for last_index, last_value in zip(last_indexes, last_values):
+                    if last_index in pred_df.index:
+                        continue
+                    pred_df.at[last_index, col] = last_value
         pred_df = pred_df.sort_index()
-        pred_df = pred_df.cumsum()
-        pred_df.drop(index=last_index, inplace=True)
+        # Customized cumsum
+        # index is datetime
+        for index in pred_df.index[cumsum_periods:]:
+            for col in pred_df.columns:
+                pred_df.at[index, col] = (
+                    pred_df.at[index, col] 
+                    + pred_df.at[index-df.index.freq*cumsum_periods, 'predicted_mean']
+                )
+        if last_indexes is not None:
+            pred_df = pred_df.drop(index=last_indexes)
 
+    # Reverse normalization
     if sigma is not None and mu is not None:
         pred_df = pred_df * sigma + mu
 
@@ -159,14 +179,17 @@ def fit_cv(
             np.std(scores)
         )
     
-    tscv = TimeSeriesSplit(n_splits=n_splits, test_size=num_predictions)
+    if n_splits > 1:
+        tscv = TimeSeriesSplit(n_splits=n_splits, test_size=num_predictions)
+        indexes = tscv.split(df)
+    else:
+        train_index = list(range(df.shape[0] - num_predictions))
+        test_index = list(range(df.shape[0] - num_predictions, df.shape[0]))
+        indexes = [(train_index, test_index)]
     scores = []
 
-    df = df.sort_values(by=time_column)
-    df = df.set_index(time_column)
-
     # Split the time series using TimeSeriesSplit
-    for fold_id, (train_index, test_index) in enumerate(tscv.split(df)):
+    for fold_id, (train_index, test_index) in enumerate(indexes):
         train_df, test_df = df.iloc[train_index], df.iloc[test_index]
         (
             norm_train, 
@@ -211,36 +234,37 @@ def fit_cv(
         else:
             raise NotImplementedError
 
-        # Visualize fitted model
-        # fitted_values = model.fittedvalues
-        # predictions = postprocess(
-        #     fitted_values.to_frame(), sigma=sigma, mu=mu,
-        #     last_index=norm_train.index[0],
-        #     last_value=norm_train.iloc[0],
-        #     cumsum=feature_method in ['diff', 'diff2', 'seasonal_diff'],
-        # )
-        # predictions = predictions.rename({0: value_column}, axis=1)
-        # visualize_ts(
-        #     predictions.reset_index(), time_column, value_column, 
-        #     outpath=osp.join(out_dir, f'fitted_{fold_id}.png'),
-        #     freq=visualize_freq,
-        #     targets=train_df.reset_index(),
-        #     figsize=(16,6),
-        # )
-
         # Match index (sometimes the index is not datetime, possibly a bug somewhere)
         if pred_df.index.dtype != 'datetime64[ns]':
-            assert pred_df.shape[0] == test_df.shape[0]
-            pred_df.index = pd.to_datetime(test_df.index)
+            pred_s = pred_df.shape[0]
+            date_s = num_predictions + engineered_train.dropna().shape[0]
+            missing = pred_s - date_s
+            date_indexes = np.concatenate([engineered_train.dropna().index, test_df.index])
+        
+            if missing > 0:
+                date_diff = date_indexes[-1] - date_indexes[-2]
+                additional_dates = [date_indexes[-1] + date_diff * i for i in range(1, missing+1)]
+                date_indexes = np.concatenate([date_indexes, additional_dates])
+            pred_df.index = pd.to_datetime(date_indexes)
 
         # Visualize forecast
         # Postprocess prediction
+        no = seasonal_lag if feature_method == 'seasonal_diff' else 1
+        last_indexes = norm_train.index[:no]
+        last_values = norm_train.iloc[:no]
         predictions = postprocess(
             pred_df, sigma=sigma, mu=mu,
-            last_index=norm_train.index[-1],
-            last_value=norm_train.iloc[-1],
+            last_indexes=last_indexes,
+            last_values=last_values,
             cumsum=feature_method in ['diff', 'diff2', 'seasonal_diff'],
+            cumsum_periods=seasonal_lag if feature_method == 'seasonal_diff' else 1,
         )
+
+
+        # Clear memory of matplotlib
+        plt.cla()
+        plt.clf()
+        plt.close('all')
         
         # Visualize predictions
         visualize_ts(
@@ -252,13 +276,18 @@ def fit_cv(
             lower_bound=predictions['lower y'],
             upper_bound=predictions['upper y'],
             figsize=(16,4),
-            zoom=10
+            # zoom=10
         )
+
+        # Clear memory of matplotlib
+        plt.cla()
+        plt.clf()
+        plt.close('all')
 
         # Evaluate the model
         score = validate(
             test_df[value_column].values, 
-            predictions['predicted_mean'].values
+            predictions['predicted_mean'].loc[test_df.index].values
         )
         scores.append(score)
 
@@ -280,8 +309,9 @@ if __name__ == '__main__':
     # load yaml file
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
-    filenames = sorted(os.listdir(DATA_DIR))
-    for filename in tqdm(filenames):
+    filenames = sorted(os.listdir(DATA_DIR), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    for filename in (pbar := tqdm(filenames)):
+        pbar.set_description(f"Processing {filename}")
         filepath = osp.join(DATA_DIR, filename)
         file_prefix = filename.split('.')[0]
         config = configs[file_prefix]
@@ -293,6 +323,10 @@ if __name__ == '__main__':
         df = pd.read_csv(filepath)
         df[time_column] = pd.to_datetime(df[time_column])
 
+        df = df.sort_values(by=time_column)
+        df = df.set_index(time_column)
+        df = df.resample(config['freq']).mean()
+        
         out_dir = osp.join(OUT_DIR, 'forecast', file_prefix)
         os.makedirs(out_dir, exist_ok=True)
 
