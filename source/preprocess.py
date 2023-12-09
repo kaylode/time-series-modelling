@@ -14,30 +14,63 @@ def adp_preprocess(df):
     result_df = df.sort_values(['timestamp'])
     return result_df
 
-def c_preprocess(df):
-    result_df = df.drop([
-        'realtime_start', 'realtime_end'
-    ], axis=1)
-    result_df = result_df.sort_values(['date'])
-    return result_df
+def c_preprocess(all_df):
+    ## Some series are missing timestamps
+    ## We will fill in the missing timestamps with the mean value of left and right timestamps
+
+    longest_index = np.argmax([len(df) for df in all_df])
+    for i in range(len(all_df)):
+        all_df[i]['date'] = pd.to_datetime(all_df[i]['date'])
+        all_df[i] = all_df[i].set_index('date')
+
+    longest_index = all_df[longest_index].index
+    for i in range(len(all_df)):
+        if len(all_df[i]) < len(longest_index):
+            all_df[i] = all_df[i].reindex(longest_index)
+            all_df[i].interpolate(limit_direction="both", inplace=True)
+
+        all_df[i] = all_df[i].drop([
+            'realtime_start', 'realtime_end'
+        ], axis=1)
+        all_df[i] = all_df[i].sort_index()
+        all_df[i] = all_df[i].reset_index()
+        # Count number of missing values
+        countna = all_df[i].isna().sum().sum()
+        if countna > 0:
+            import pdb; pdb.set_trace()
+
+
+    return all_df
+
 
 
 def run(args):
     os.makedirs(args.out_dir, exist_ok=True)
     filenames = os.listdir(args.data_dir)
+
+    if args.task == 'C':
+        all_df = []
+
     for filename in filenames:
         filepath = osp.join(args.data_dir, filename)
         df = pd.read_csv(filepath)
 
         if args.task == 'ADP':
             df = adp_preprocess(df)
+            df.to_csv(
+                osp.join(args.out_dir, filename), 
+                index=False
+            )
         elif args.task == 'C':
-            df = c_preprocess(df)
-    
-        df.to_csv(
-            osp.join(args.out_dir, filename), 
-            index=False
-        )
+            all_df.append(df)
+
+    if args.task == 'C':
+        all_df = c_preprocess(all_df)
+        for filename, df in zip(filenames, all_df):
+            df.to_csv(
+                osp.join(args.out_dir, filename), 
+                index=False
+            )     
 
     return df
 
