@@ -1,5 +1,5 @@
-fe_method: norm
-cluster_method: tskmeans
+fe_method: feature_matrix #[norm, feature_matrix]
+cluster_method: kmeans  #[kmeans, tskmeans]
 model_configs:
   n_init: 10
   random_state: 42

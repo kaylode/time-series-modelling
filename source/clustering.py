@@ -116,7 +116,7 @@ def cluster(df, time_column, value_column, fe_method:str = 'norm', method:str = 
             method=method
         )
         model = fit_kmeans(optimal_k, features, model_configs, method=method)
-        centroids = model.cluster_centers_.squeeze(-1)
+        centroids = model.cluster_centers_.squeeze()
     
         # Save model
         joblib.dump(model, osp.join(out_dir, 'model.pkl'))
@@ -131,6 +131,11 @@ def cluster(df, time_column, value_column, fe_method:str = 'norm', method:str = 
     tmp_df = df.copy()
     tmp_df['cluster'] = tmp_df['id'].map(prediction_mapping)
     
+    # Clear matplotlib memory
+    plt.cla()
+    plt.clf()
+    plt.close('all')
+
     # Visualize predictions
     visualize_pca(
         np.array(features), 
@@ -138,6 +143,11 @@ def cluster(df, time_column, value_column, fe_method:str = 'norm', method:str = 
         out_dir=out_dir,
         centroids=centroids
     )
+
+    # Clear memory of matplotlib
+    plt.cla()
+    plt.clf()
+    plt.close('all')
 
     # Visualize series clusters
     tmp_df = tmp_df.set_index(time_column)
