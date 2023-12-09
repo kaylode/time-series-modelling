@@ -1,6 +1,78 @@
 model_configs:
-  init: random
+#   init: random
   n_init: 10
-  max_iter: 300
+#   max_iter: 300
   random_state: 42
-  metric: dtw
+#   metric: dtw
+
+MRTSMPCSM4400CUSN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM44000USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM44111USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM44112USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM4413USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM442USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM442USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM444USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM4453USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM44611USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM4481USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM448USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM44X72USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM45111USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM45112USN:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM4541USS:
+    seasonality: 12
+    visualize_freq: "Y"
+MRTSSM7221USN:
+    seasonality: 12
+    visualize_freq: "Y"
+RETAILIMSA:
+    seasonality: 12
+    visualize_freq: "Y"
+RETAILIRSA:
+    seasonality: 12
+    visualize_freq: "Y"
+RETAILMPCSMNSA:
+    seasonality: 12
+    visualize_freq: "Y"
+RETAILMPCSMSA:
+    seasonality: 12
+    visualize_freq: "Y"
+RETAILSMNSA:
+    seasonality: 12
+    visualize_freq: "Y"
+RETAILSMSA:
+    seasonality: 12
+    visualize_freq: "Y"
+
+
