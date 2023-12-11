@@ -16,6 +16,7 @@ def adp_preprocess(df, freq):
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     result_df = df.sort_values(['timestamp'])
     result_df = result_df.set_index('timestamp')
+    result_df.index = result_df.index.tz_localize(None)
     result_df = result_df.resample(freq).mean()
     result_df.interpolate(limit_direction="both", inplace=True)
     result_df = result_df.reset_index()
@@ -53,7 +54,7 @@ def c_preprocess(all_df):
 
 def run(args):
     os.makedirs(args.out_dir, exist_ok=True)
-    filenames = sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    filenames = ['dataset_101.csv'] #sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
     if args.task == 'C':
