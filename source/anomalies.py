@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
 parser.add_argument('--out_dir', type=str, default='data/anomalies')
 parser.add_argument('--config_file', type=str, default='data/AD&P.yaml')
+parser.add_argument('--id', type=int, default=-1, required=False)
 
 def detect_anomalies_rolling_mean(
         _df, time_column, value_column,
@@ -151,7 +152,7 @@ def detect_anomalies_stl(
 
     return anomalies
 
-def impute_anomalies(df, value_column, anomalies):
+def impute_anomalies(df, value_column, anomalies, out_dir=None):
     # Impute new values for anomalies, 
     # using mean of window before and after anomaly
     new_df = df.copy()
@@ -160,9 +161,20 @@ def impute_anomalies(df, value_column, anomalies):
     anomalies_idx = anomalies.index
     for idx in anomalies_idx:
         new_df.at[idx, value_column] = np.nan
-
     # Impute anomalies new values using interpolation
     new_df[value_column] = new_df[value_column].interpolate(limit_direction="both")
+    
+    # Plot only the difference, highlighting the difference parts
+    plt.figure(figsize=(16,4))
+    plt.plot(new_df[value_column], label='Imputed', color='red')
+    plt.plot(df[value_column], label='Original', color='blue', alpha=0.5)
+    plt.legend()
+    plt.savefig(osp.join(out_dir, 'imputed.png'), bbox_inches='tight')
+    # Clear memory of matplotlib
+    plt.cla()
+    plt.clf()
+    plt.close('all')
+    
     return new_df
    
 if __name__ == '__main__':
@@ -177,8 +189,12 @@ if __name__ == '__main__':
     # load yaml file
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
-    filenames = sorted(os.listdir(DATA_DIR))
-for filename in (pbar := tqdm(filenames)):
+    if args.id >= 0:
+        filenames = [f'dataset_{args.id}.csv']
+    else:
+        filenames = sorted(os.listdir(DATA_DIR), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    
+    for filename in (pbar := tqdm(filenames)):
         pbar.set_description(f"Processing {filename}")
         filepath = osp.join(DATA_DIR, filename)
         file_prefix = filename.split('.')[0]
@@ -238,11 +254,25 @@ for filename in (pbar := tqdm(filenames)):
                     'f1_score': f1_score
                 }, f)
 
+        # Clear memory of matplotlib
+        plt.cla()
+        plt.clf()
+        plt.close('all')
+
+        # Resample to frequency
+        df[time_column] = pd.to_datetime(df[time_column])
+        df = df.sort_values(by=time_column)
+        df = df.set_index(time_column)
+        anomalies = anomalies.set_index(time_column)
+        df = df.resample(config['freq']).mean()
+
         # Impute anomalies
         imputed_df = impute_anomalies(
             df, 
             value_column, 
-            anomalies
+            anomalies,
+            out_dir=out_dir
         )
+        imputed_df = imputed_df.reset_index()
         os.makedirs(osp.join(OUT_DIR, 'imputed'), exist_ok=True)
         imputed_df.to_csv(osp.join(OUT_DIR, 'imputed', filename), index=False)
