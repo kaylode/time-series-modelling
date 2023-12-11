@@ -3,4 +3,5 @@ kneed
 gdown
 prophet
 tslearn
-pmdarima
+optuna
+kaleido
