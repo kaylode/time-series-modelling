@@ -129,7 +129,6 @@ def visualize_ts(
         outpath = None,
         freq='D',
         figsize=(16,12),
-        zoom=4,
         check_stationarity=False,
         plot_legend_labels={
             'df': 'Original', 
@@ -163,7 +162,7 @@ def visualize_ts(
     plt.xticks(date_range)
     plt.xlabel('Timestamp')
     plt.xticks(rotation=90)
-    plt.ylabel('KPI')
+    plt.ylabel(value_column)
 
     for dt in date_range:
         plt.axvline(dt, color='k', linestyle='--', alpha=0.5)
@@ -173,30 +172,14 @@ def visualize_ts(
         sta = check_stationary(df, value_column)
         title += f'p-value: {sta[1]}\n'
 
-    timestamp_diff_dt = df[time_column].iloc[1] - df[time_column].iloc[0]
     title += f'Frequency: {freq}\n'
     
     if predictions is not None:
-        # forecast_steps = len(predictions)
-        # forecast_timestamps = [
-        #     df[time_column].max()+timestamp_diff_dt*i for i in range(1, forecast_steps+1)
-        # ]
-
         plt.plot(predictions, color='g', label=plot_legend_labels.get('predictions', None), alpha=0.7)
 
         if lower_bound is not None and upper_bound is not None:
             plt.fill_between(predictions.index, lower_bound, upper_bound, color='g', alpha=0.1)
 
-        # Zoom into the forecasted region
-        # plt.xlim([
-        #     df[time_column].max()-timestamp_diff_dt*(forecast_steps*zoom), 
-        #     df[time_column].max()+timestamp_diff_dt*(forecast_steps*2)
-        # ])
-
-        plt.ylim([
-            min(df[value_column].min(), predictions.min())-1, 
-            max(df[value_column].max(), predictions.max())+1
-        ])
 
     if anomalies is not None:
         plt.scatter(

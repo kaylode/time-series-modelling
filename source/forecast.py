@@ -29,6 +29,7 @@ def fit_cv(
         df, time_column, value_column, 
         n_splits = 5, num_predictions=5, 
         tuner_config={},
+        feature_method=None,
         method='arima', seasonal_lag=None, 
         visualize_freq='D', out_dir='data/results', best_key='mape'
     ):
@@ -51,9 +52,10 @@ def fit_cv(
             'n_splits': n_splits,
             'best_key': best_key,
             'time_column': time_column,
-            'value_column': value_column
+            'value_column': value_column,
+            'fe_method': feature_method,
         })
-        feature_method = best_params['fe_method']
+        feature_method = best_params.get('fe_method', feature_method)
 
         # After finding best hyperparameters, fit the model again
 
@@ -73,7 +75,7 @@ def fit_cv(
         # Visualize input to debug
         # visualize_ts(
         #     engineered_train.dropna().reset_index(), time_column, 0, 
-        #     outpath=osp.join(out_dir, f'debug_{fold_id}.png'),
+        #     outpath=osp.join(out_dir, f'input.png'),
         #     freq=visualize_freq,
         #     figsize=(16,6),
         #     check_stationarity=True
@@ -121,12 +123,10 @@ def fit_cv(
             cumsum=feature_method in ['diff', 'diff2', 'seasonal_diff'],
             cumsum_periods=seasonal_lag if feature_method == 'seasonal_diff' else 1,
         )
-
         # Clear memory of matplotlib
         plt.cla()
         plt.clf()
         plt.close('all')
-        
         # Visualize predictions
         visualize_ts(
             train_df.reset_index(), time_column, value_column, 
@@ -150,6 +150,10 @@ def fit_cv(
             test_df[value_column].values, 
             predictions['predicted_mean'].loc[test_df.index].values
         )
+
+        # Save predictions
+        predictions = predictions.rename({'index': time_column}, axis=1)
+        predictions.to_csv(osp.join(out_dir, 'predictions.csv'))
 
         return score
 
@@ -200,7 +204,8 @@ if __name__ == '__main__':
             tuner_config=tuner_config,
             seasonal_lag=config.get('seasonality', None),
             visualize_freq=config['visualize_freq'],
-            out_dir=out_dir
+            out_dir=out_dir,
+            feature_method=model_config.get('fe_method', None),
         )
 
         with open(osp.join(out_dir, 'metrics.json'), 'w') as f:

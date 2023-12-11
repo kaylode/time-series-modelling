@@ -42,11 +42,6 @@ def c_preprocess(all_df):
         ], axis=1)
         all_df[i] = all_df[i].sort_index()
         all_df[i] = all_df[i].reset_index()
-        # Count number of missing values
-        countna = all_df[i].isna().sum().sum()
-        if countna > 0:
-            import pdb; pdb.set_trace()
-
 
     return all_df
 
@@ -54,7 +49,7 @@ def c_preprocess(all_df):
 
 def run(args):
     os.makedirs(args.out_dir, exist_ok=True)
-    filenames = ['dataset_101.csv'] #sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    filenames = sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
     if args.task == 'C':

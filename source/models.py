@@ -64,7 +64,9 @@ def feature_engineering(df, value_column, method='diff', mu=None, sigma=None, se
             mu = np.mean(df[value_column])
         if sigma is None:
             sigma = np.std(df[value_column])
-    
+
+        if sigma == 0:
+            sigma = 1e-6
         norm_values = df.apply(lambda x: (x[value_column] - mu) / sigma, axis=1)
         return norm_values, mu, sigma
 
@@ -144,6 +146,7 @@ def get_mean_std(scores):
 def objective(trial, df, params):
     seasonal_lag = params['seasonal_lag']
     method = params['method']
+    fe_method = params.get('fe_method', None)
     num_predictions = params['num_predictions']
     n_splits = params['n_splits']
     best_key = params['best_key']
@@ -163,7 +166,8 @@ def objective(trial, df, params):
     for fold_id, (train_index, test_index) in enumerate(indexes):
         train_df, test_df = df.iloc[train_index], df.iloc[test_index]
 
-        fe_method = trial.suggest_categorical("fe_method", ["diff", "seasonal_diff", "norm"])
+        if fe_method is None:
+            fe_method = trial.suggest_categorical("fe_method", ["diff", "seasonal_diff", "norm"])
         (
             norm_train, 
             engineered_train, 
