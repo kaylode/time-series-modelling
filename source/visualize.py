@@ -374,13 +374,13 @@ def visualize_grid(
         # remove all the ticks (both axes), and tick labels on the Y axis
         plt.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
         
-
-        if predictions_ is not None:
+        if predictions_ is None and anomalies_ is None:
+            plt.plot(df[value_column])
+        elif predictions_ is not None:
             plt.plot(df[value_column],  label='Ground Truth', alpha=0.7)
             plt.plot(pred_df['predicted_mean'], color='C3', label='Predictions', alpha=0.7)
             plt.fill_between(pred_df.index, pred_df['lower y'], pred_df['upper y'], color='C3', alpha=0.1)
-
-        if anomalies_ is not None:
+        elif anomalies_ is not None:
             # Plot
             plt.plot(df[value_column],  label='Original')
             plt.scatter(
@@ -395,7 +395,6 @@ def visualize_grid(
 
     if outpath:
         plt.savefig(outpath)
-
     else:
         plt.show()
 
