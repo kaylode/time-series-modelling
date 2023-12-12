@@ -335,6 +335,73 @@ def visualize_elbow(sse, silhouette_coefficients, out_dir=None):
     return optimal_k
 
 
+def visualize_grid(
+        df, figsize=(30, 20), 
+        outpath=None, 
+        time_column='date', value_column='value',
+        predictions=None, 
+        anomalies=None
+    ):
+    fig = plt.figure(figsize=figsize)
+
+    df_ = df.copy()
+    predictions_ = predictions.copy() if predictions is not None else None
+    anomalies_ = anomalies.copy() if anomalies is not None else None
+
+    ids = df_.id.unique()
+    columns = int(math.sqrt(len(ids)))
+    rows = math.ceil(len(ids) / columns)
+
+    for i in range(0, columns*rows):
+        if i >= len(ids):
+            break
+        df = df_.loc[df_.id==ids[i]]
+        df = df.sort_values(by=time_column)
+        df = df.set_index(time_column)
+
+        if predictions_ is not None:
+            pred_df = predictions_.loc[predictions_.id==ids[i]]
+            pred_df = pred_df.sort_values(by=time_column)
+            pred_df = pred_df.set_index(time_column)
+
+        if anomalies_ is not None:
+            anomalies = anomalies_.loc[anomalies_.id==ids[i]]
+            anomalies = anomalies.sort_values(by=time_column)
+            anomalies = anomalies.set_index(time_column)
+
+        fig.add_subplot(rows, columns, i+1)
+
+        # remove all the ticks (both axes), and tick labels on the Y axis
+        plt.tick_params(top=False, bottom=False, left=False, right=False, labelleft=False, labelbottom=False)
+        
+
+        if predictions_ is not None:
+            plt.plot(df[value_column],  label='Ground Truth', alpha=0.7)
+            plt.plot(pred_df['predicted_mean'], color='C3', label='Predictions', alpha=0.7)
+            plt.fill_between(pred_df.index, pred_df['lower y'], pred_df['upper y'], color='C3', alpha=0.1)
+
+        if anomalies_ is not None:
+            # Plot
+            plt.plot(df[value_column],  label='Original')
+            plt.scatter(
+                anomalies.index,
+                anomalies[value_column], 
+                color='C1', marker='D',
+                label='Anomalies'
+            )
+
+        # add figure name below each image as title
+        plt.title(ids[i], fontsize=8)
+
+    if outpath:
+        plt.savefig(outpath)
+
+    else:
+        plt.show()
+
+    plt.clf()
+    plt.close()
+
 if __name__ == "__main__":
     args = parser.parse_args()
     
