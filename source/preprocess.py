@@ -49,7 +49,10 @@ def c_preprocess(all_df):
 
 def run(args):
     os.makedirs(args.out_dir, exist_ok=True)
-    filenames = sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    if args.task == 'AD&P':
+        filenames = sorted(os.listdir(args.data_dir), key=lambda x: int(x.split('.')[0].split('_')[-1]))
+    else:
+        filenames = sorted(os.listdir(args.data_dir))
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
 
     if args.task == 'C':
