@@ -1,8 +1,8 @@
 tuner:
-    n_trials: 30
+    n_trials: 15
     direction: minimize
-    n_splits: 5 #cross validation
-    use_best_params: False
+    n_splits: 3 #cross validation
+    # use_best_params: True
 dataset_1: #ok
     freq: 15T
     seasonality: 96 # daily 96 = 24 * (60/15)
@@ -11,11 +11,12 @@ dataset_1: #ok
       method: stl
       threshold: 3
     forecast:
-        method: arima
-        num_predictions: 96
+      method: arima
+      num_predictions: 96
+      fe_method: seasonal_diff
 dataset_2: #ok
     freq: 5T
-    seasonality: 288 # daily 288 = 24 * (60/5)
+    seasonality: 60 # daily 288 = 24 * (60/5)
     visualize_freq: D
     anomalies:
       method: rolling_std
@@ -24,9 +25,10 @@ dataset_2: #ok
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_3: #ok
     freq: 5T
-    seasonality: 288 # daily 288 = 24 * (60/5)
+    seasonality: 60 # daily 288 = 24 * (60/5)
     visualize_freq: D
     anomalies:
       method: rolling_mean
@@ -35,6 +37,7 @@ dataset_3: #ok
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_4: #ok
     freq: 5T
     seasonality: 2016 # weekly 2016 = 24 * 7 * (60/5)
@@ -45,19 +48,21 @@ dataset_4: #ok
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_5:
     freq: 5T
-    seasonality: 204 #  204 = 17 * (60/5)
+    seasonality: 288 #  204 = 17 * (60/5)
     visualize_freq: D
     anomalies:
       method: stl
       threshold: 3
     forecast:
       method: arima
-      num_predictions: 288
+      num_predictions: 60
+      fe_method: norm
 dataset_6: #ok
     freq: 5T
-    seasonality: 288 #  204 = 17 * (60/5)
+    seasonality: 204 #  204 = 17 * (60/5)
     visualize_freq: D
     anomalies:
       method: rolling_std
@@ -66,9 +71,10 @@ dataset_6: #ok
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_7:
     freq: 5T
-    seasonality: 288 # daily 288 = 24 * (60/5)
+    seasonality: 2 # daily 288 = 24 * (60/5)
     visualize_freq: D
     anomalies: 
       method: stl
@@ -76,6 +82,7 @@ dataset_7:
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_8:
     freq: 1H
     seasonality: 24 # daily 24 = 24 * 1
@@ -88,7 +95,7 @@ dataset_8:
       num_predictions: 24
 dataset_9: #ok
     freq: 5T
-    seasonality: 24 # daily 288 = 24 * (60/5)
+    seasonality: 12 # daily 288 = 24 * (60/5)
     visualize_freq: D
     anomalies:
       method: rolling_std
@@ -97,6 +104,7 @@ dataset_9: #ok
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_10: #ok
     freq: 5T
     seasonality: 288 # daily 288 = 24 * (60/5)
@@ -117,6 +125,7 @@ dataset_11: #ok
     forecast:
       method: arima
       num_predictions: 100
+      fe_method: seasonal_diff
 dataset_12: #ok
     freq: 5T
     seasonality: 288 # daily 288 = 24 * (60/5)
@@ -127,6 +136,7 @@ dataset_12: #ok
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_13:
     freq: 1T
     seasonality: 1440 # daily 1440 = 24 * 60
@@ -137,9 +147,10 @@ dataset_13:
     forecast:
       method: arima
       num_predictions: 1440
+      fe_method: seasonal_diff
 dataset_100:
     freq: 1T
-    seasonality: 1440 # daily 1440 = 24 * 60
+    seasonality: 60 # daily 1440 = 24 * 60
     visualize_freq: D
     anomalies: 
       method: rolling_mean
@@ -148,6 +159,7 @@ dataset_100:
     forecast:
       method: arima
       num_predictions: 1440
+      fe_method: seasonal_diff
 dataset_101:
     freq: 1T
     seasonality: 1440 #10080 #weekly: 10080 = 24 * 7 * 60
@@ -158,6 +170,7 @@ dataset_101:
     forecast:
       method: arima
       num_predictions: 1440
+      fe_method: seasonal_diff
 dataset_102:
     freq: 1T
     seasonality: 1440 # daily 1440 = 24 * 60
@@ -168,6 +181,7 @@ dataset_102:
     forecast:
       method: arima
       num_predictions: 1440
+      fe_method: seasonal_diff
 dataset_103:
     freq: 1T
     seasonality: 1440 #8640 # every 6 days: 8640 = 24 * 360
@@ -190,6 +204,7 @@ dataset_105:
     forecast:
       method: arima
       num_predictions: 1440
+      fe_method: seasonal_diff
 dataset_106:
     freq: 30T
     seasonality: 48 # daily 48 = 24 * 2
@@ -211,6 +226,7 @@ dataset_201:
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_202:
     freq: 5T
     seasonality: 12 # hourly: 60/5
@@ -221,21 +237,22 @@ dataset_202:
       threshold: 5
     forecast:
       method: arima
-      num_predictions: 12
+      num_predictions: 288
+      fe_method: seasonal_diff
 dataset_203:
     freq: 5T
     seasonality: 288 # daily
     visualize_freq: D
     anomalies: 
-      method: rolling_std
-      window_size: 12
-      threshold: 5
+      method: stl
+      threshold: 3
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_204:
     freq: 5T
-    seasonality: 288 # daily 2016 = 24 * 7 * (60/5)
+    seasonality: 24 # daily 2016 = 24 * 7 * (60/5)
     visualize_freq: D
     anomalies: 
       method: rolling_mean
@@ -244,9 +261,10 @@ dataset_204:
     forecast:
       method: arima
       num_predictions: 288
+      fe_method: seasonal_diff
 dataset_205:
     freq: 5T
-    seasonality: 12 # daily 2016 = 24 * 7 * (60/5)
+    seasonality: 2016 # weekly 2016 = 24 * 7 * (60/5)
     visualize_freq: D
     anomalies: 
       method: rolling_mean
@@ -254,7 +272,8 @@ dataset_205:
       threshold: 5
     forecast:
       method: arima
-      num_predictions: 288
+      num_predictions: 2016
+      fe_method: seasonal_diff
 dataset_206:
     freq: 1T
     seasonality: 1440 # daily 1440 = 24 * 60
@@ -265,3 +284,4 @@ dataset_206:
     forecast:
       method: arima
       num_predictions: 1440
+      fe_method: seasonal_diff
