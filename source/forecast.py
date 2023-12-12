@@ -40,7 +40,6 @@ def fit_cv(
         train_df, test_df = df.iloc[train_index], df.iloc[test_index]
 
         # Fit model first time using cross validation to find best hyperparameters
-        tuner_config['method'] = method
         tuner_config['storage'] = osp.join(out_dir, 'tuner', f'optuna.log')
         tuner_config['save_dir'] = osp.join(out_dir, 'tuner')
         os.makedirs(tuner_config['save_dir'], exist_ok=True)

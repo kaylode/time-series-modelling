@@ -254,13 +254,14 @@ class Tuner:
         pruner=None,
         sampler=None,
         save_dir: str = None,
-        method: str = "arima",
         use_best_params: bool = False,
     ) -> None:
         
         if storage is not None:
             if storage.endswith(".log"):
                 self.storage = JournalStorage(JournalFileStorage(storage))
+        else:
+            self.storage = None
 
         self.save_dir = save_dir
         self.study_name = study_name
@@ -269,7 +270,6 @@ class Tuner:
         self.pruner = pruner
         self.sampler = sampler
         self.save_dir = save_dir
-        self.method = method
         self.use_best_params = use_best_params
         if save_dir is not None:
             os.makedirs(save_dir, exist_ok=True)
@@ -311,6 +311,8 @@ class Tuner:
         return best_trial.params
 
     def save_best_config(self, best_params: Dict):
+        if self.save_dir is None:
+            return
         with open(os.path.join(self.save_dir, "best_config.json"), "w") as f:
             json.dump(best_params, f, indent=4)
         print(f"Best config saved to {self.save_dir}/best_config.json")

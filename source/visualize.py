@@ -150,9 +150,9 @@ def visualize_ts(
     df = df.sort_values(by=time_column)
 
     if targets is not None:
-        plt.plot(targets[time_column], targets[value_column], color='C2', label=plot_legend_labels.get('targets', None))
+        plt.plot(targets[time_column], targets[value_column], color='C2', label=plot_legend_labels.get('targets', None), zorder=1)
 
-    plt.plot(df[time_column], df[value_column], color='C0', label=plot_legend_labels.get('df', None))
+    plt.plot(df[time_column], df[value_column], color='C0', label=plot_legend_labels.get('df', None), zorder=2)
 
     if freq == 'D':
         time_dt = datetime.timedelta(days=1)
@@ -182,10 +182,10 @@ def visualize_ts(
     title += f'Frequency: {freq}\n'
     
     if predictions is not None:
-        plt.plot(predictions, color='C3', label=plot_legend_labels.get('predictions', None), alpha=0.7)
+        plt.plot(predictions, color='C3', label=plot_legend_labels.get('predictions', None), alpha=0.7, zorder=4)
 
         if lower_bound is not None and upper_bound is not None:
-            plt.fill_between(predictions.index, lower_bound, upper_bound, color='g', alpha=0.1)
+            plt.fill_between(predictions.index, lower_bound, upper_bound, color='g', alpha=0.1, zorder=3)
 
 
     if anomalies is not None:
@@ -193,7 +193,8 @@ def visualize_ts(
             anomalies[time_column], 
             anomalies[value_column], 
             color='C1', marker='D',
-            label=plot_legend_labels.get('anomalies', None)
+            label=plot_legend_labels.get('anomalies', None),
+            zorder=5
         )
 
     plt.title(title)
@@ -377,17 +378,17 @@ def visualize_grid(
         if predictions_ is None and anomalies_ is None:
             plt.plot(df[value_column])
         elif predictions_ is not None:
-            plt.plot(df[value_column],  label='Ground Truth', alpha=0.7)
-            plt.plot(pred_df['predicted_mean'], color='C3', label='Predictions', alpha=0.7)
-            plt.fill_between(pred_df.index, pred_df['lower y'], pred_df['upper y'], color='C3', alpha=0.1)
+            plt.plot(df[value_column],  label='Ground Truth', alpha=0.7, zorder=1)
+            plt.plot(pred_df['predicted_mean'], color='C3', label='Predictions', alpha=0.7, zorder=3)
+            plt.fill_between(pred_df.index, pred_df['lower y'], pred_df['upper y'], color='C3', alpha=0.1, zorder=2)
         elif anomalies_ is not None:
             # Plot
-            plt.plot(df[value_column],  label='Original')
+            plt.plot(df[value_column],  label='Original', zorder=1)
             plt.scatter(
                 anomalies.index,
                 anomalies[value_column], 
                 color='C1', marker='D',
-                label='Anomalies'
+                label='Anomalies', zorder=2
             )
 
         # add figure name below each image as title
