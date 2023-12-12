@@ -152,8 +152,9 @@ def fit_cv(
         )
 
         # Save predictions
+        predictions = predictions.reset_index()
         predictions = predictions.rename({'index': time_column}, axis=1)
-        predictions.to_csv(osp.join(out_dir, 'predictions.csv'))
+        predictions.to_csv(osp.join(out_dir, 'predictions.csv'), index=False)
 
         return score
 

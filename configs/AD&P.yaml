@@ -2,7 +2,7 @@ tuner:
     n_trials: 15
     direction: minimize
     n_splits: 3 #cross validation
-    # use_best_params: True
+    use_best_params: False
 dataset_1: #ok
     freq: 15T
     seasonality: 96 # daily 96 = 24 * (60/15)
