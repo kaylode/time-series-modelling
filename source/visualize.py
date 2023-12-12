@@ -14,6 +14,7 @@ from statsmodels.tsa.stattools import adfuller
 from sklearn.decomposition import PCA
 from kneed import KneeLocator
 
+plt.style.use('fivethirtyeight')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
@@ -31,19 +32,19 @@ def visualize_diff(df, time_column, value_column, periods, out_dir=None, figsize
     diff = tmp_df.diff().dropna()
     plt.figure(figsize=figsize)
     plt.subplot(3,1,1)
-    plt.plot(diff, color='blue', label='1st Differencing')
+    plt.plot(diff, color='C0', label='1st Differencing')
     plt.title('1st Differencing')
 
     # Visualize 2st differencing
     diff2 = diff.diff().dropna()
     plt.subplot(3,1,2)
-    plt.plot(diff2, color='blue', label='2nd Differencing')
+    plt.plot(diff2, color='C0', label='2nd Differencing')
     plt.title('2nd Differencing')
 
     # Visualize seasonal differencing
     seasonal_diff = tmp_df.diff(periods=periods).dropna()
     plt.subplot(3,1,3)
-    plt.plot(seasonal_diff, color='blue', label='Seasonal Differencing')
+    plt.plot(seasonal_diff, color='C0', label='Seasonal Differencing')
     plt.title('Seasonal Differencing')
 
     plt.legend(loc='best')
@@ -51,6 +52,8 @@ def visualize_diff(df, time_column, value_column, periods, out_dir=None, figsize
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'diff.png'), bbox_inches='tight')
+    else:
+        plt.show()
     plt.clf()
     plt.close()
 
@@ -68,14 +71,16 @@ def visualize_rollings(
     rolling_mean = tmp_df.rolling(window=window_size).mean()
     rolling_std = tmp_df.rolling(window=window_size).std()
     plt.figure(figsize=figsize)
-    plt.plot(tmp_df, color='blue', label='Original')
-    plt.plot(rolling_mean, color='red', label='Rolling Mean')
-    plt.plot(rolling_std, color='black', label='Rolling Std')
+    plt.plot(tmp_df, label='Original')
+    plt.plot(rolling_mean, color='C1', label='Rolling Mean')
+    plt.plot(rolling_std, color='C3', label='Rolling Std')
     plt.legend(loc='best')
 
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'rolling_stats.png'), bbox_inches='tight')
+    else:
+        plt.show()
     plt.clf()
     plt.close()
 
@@ -108,6 +113,8 @@ def visualize_stl(original, trend, seasonal, resid, out_dir=None, figsize=(16,8)
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'stl.png'), bbox_inches='tight')
+    else:
+        plt.show()
 
     plt.close()
 
@@ -143,9 +150,9 @@ def visualize_ts(
     df = df.sort_values(by=time_column)
 
     if targets is not None:
-        plt.plot(targets[time_column], targets[value_column], color='orange', label=plot_legend_labels.get('targets', None))
+        plt.plot(targets[time_column], targets[value_column], color='C2', label=plot_legend_labels.get('targets', None))
 
-    plt.plot(df[time_column], df[value_column], color='b', label=plot_legend_labels.get('df', None))
+    plt.plot(df[time_column], df[value_column], color='C0', label=plot_legend_labels.get('df', None))
 
     if freq == 'D':
         time_dt = datetime.timedelta(days=1)
@@ -175,7 +182,7 @@ def visualize_ts(
     title += f'Frequency: {freq}\n'
     
     if predictions is not None:
-        plt.plot(predictions, color='g', label=plot_legend_labels.get('predictions', None), alpha=0.7)
+        plt.plot(predictions, color='C3', label=plot_legend_labels.get('predictions', None), alpha=0.7)
 
         if lower_bound is not None and upper_bound is not None:
             plt.fill_between(predictions.index, lower_bound, upper_bound, color='g', alpha=0.1)
@@ -185,7 +192,7 @@ def visualize_ts(
         plt.scatter(
             anomalies[time_column], 
             anomalies[value_column], 
-            color='r', marker='D',
+            color='C1', marker='D',
             label=plot_legend_labels.get('anomalies', None)
         )
 
@@ -196,6 +203,8 @@ def visualize_ts(
         if not os.path.exists(dirname):
             os.makedirs(dirname, exist_ok=True)
         plt.savefig(outpath)
+    else:
+        plt.show()
     
     plt.clf()
     plt.close()
@@ -227,12 +236,12 @@ def visualize_autocorrelations(df, time_column, value_column, lags=None, out_dir
 VISUALIZATION FUNCTIONS FOR CLUSTERING TASK
 """
 
-def visualize_series_cluster(series_df, out_dir):
+def visualize_series_cluster(series_df, out_dir=None, figsize=(25,25)):
     labels = series_df.cluster.unique()
     num_clusters = len(set(labels))
     plot_count = math.ceil(math.sqrt(num_clusters))
 
-    fig = plt.figure(figsize=(25, 25))
+    fig = plt.figure(figsize=figsize)
     fig.suptitle('Clusters')
 
     spec = gridspec.GridSpec(plot_count, plot_count, figure=fig)
@@ -255,7 +264,11 @@ def visualize_series_cluster(series_df, out_dir):
     # Adjust layout to prevent clipping of titles
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-    fig.savefig(osp.join(out_dir, 'clusters.png'), bbox_inches='tight')
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        fig.savefig(osp.join(out_dir, 'clusters.png'), bbox_inches='tight')
+    else:
+        plt.show()
     plt.cla()
     plt.clf()
     plt.close()
@@ -278,6 +291,8 @@ def visualize_pca(features, labels, centroids=None, out_dir=None):
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         plt.savefig(osp.join(out_dir, 'pca.png'), bbox_inches='tight')
+    else:
+        plt.show()
     plt.cla()
     plt.clf()
     plt.close()
@@ -299,6 +314,8 @@ def visualize_elbow(sse, silhouette_coefficients, out_dir=None):
         plt.title(f"Optimal k: {optimal_k}")
     if out_dir:
         plt.savefig(osp.join(out_dir, 'elbow.png'))
+    else:
+        plt.show()
 
     plt.figure(figsize=(10, 7))
     plt.style.use("fivethirtyeight")
@@ -308,6 +325,8 @@ def visualize_elbow(sse, silhouette_coefficients, out_dir=None):
     plt.ylabel("Silhouette Coefficient")
     if out_dir:
         plt.savefig(osp.join(out_dir, 'silhouette.png'))
+    else:
+        plt.show()
 
     plt.cla()
     plt.clf()

@@ -11,6 +11,8 @@ from source.constants import TASK_COLUMNS
 import argparse
 import yaml
 
+plt.style.use('fivethirtyeight')
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='data')
 parser.add_argument('--out_dir', type=str, default='data/anomalies')
@@ -20,7 +22,8 @@ parser.add_argument('--id', type=int, default=-1, required=False)
 def detect_anomalies_rolling_mean(
         _df, time_column, value_column,
         window_size=10, threshold=2.0, 
-        out_dir=None, visualize_freq='D'
+        out_dir=None, visualize_freq='D',
+        figsize=(16,4)
     ):
 
     # Compute rolling mean
@@ -34,17 +37,20 @@ def detect_anomalies_rolling_mean(
     upper = diff_rolling_mean_mean + threshold*diff_rolling_mean_std
 
     # Plot rolling mean
-    plt.figure(figsize=(16,4))
+    plt.figure(figsize=figsize)
     plt.plot(df[time_column], df['rolling_mean'], label='Rolling mean')
     plt.plot(df[time_column], diff_rolling_mean, label='Rolling mean residuals')
     plt.xticks(rotation=90)
     plt.fill_between(
         [df[time_column].min(), df[time_column].max()], 
-        lower, upper, color='g', alpha=0.25, 
+        lower, upper, color='C3', alpha=0.25, 
         linestyle='--', linewidth=2
     )
     plt.legend()
-    plt.savefig(osp.join(out_dir, 'rolling_mean.png'), bbox_inches='tight')
+    if out_dir is not None:
+        plt.savefig(osp.join(out_dir, 'rolling_mean.png'), bbox_inches='tight')
+    else:
+        plt.show()
 
     # Mark anomalies based on threshold (you can adjust this threshold as needed)
     anomalies = df[(diff_rolling_mean < lower) | (diff_rolling_mean > upper)]
@@ -54,14 +60,15 @@ def detect_anomalies_rolling_mean(
         outpath=osp.join(out_dir, 'anomalies_rolling_mean.png'),
         freq=visualize_freq,
         anomalies=anomalies,
-        figsize=(16,4)
+        figsize=figsize
     )
     return anomalies
 
 def detect_anomalies_rolling_std(
         _df, time_column, value_column,
         window_size, threshold=2.0, 
-        out_dir=None, visualize_freq='D'
+        out_dir=None, visualize_freq='D',
+        figsize=(16,4)
     ):
     df = _df.copy()
     # Compute rolling standard deviation
@@ -74,17 +81,20 @@ def detect_anomalies_rolling_std(
     upper = diff_rolling_std_mean + threshold*diff_rolling_std_std
 
     # Plot rolling std
-    plt.figure(figsize=(16,4))
+    plt.figure(figsize=figsize)
     plt.plot(df[time_column], df['rolling_std'], label='Rolling std')
     plt.plot(df[time_column], diff_rolling_std, label='Rolling std residuals')
     plt.xticks(rotation=90)
     plt.fill_between(
         [df[time_column].min(), df[time_column].max()], 
-        lower, upper, color='g', alpha=0.25, 
+        lower, upper, color='C3', alpha=0.25, 
         linestyle='--', linewidth=2
     )
     plt.legend()
-    plt.savefig(osp.join(out_dir, 'rolling_std.png'), bbox_inches='tight')
+    if out_dir is not None:
+        plt.savefig(osp.join(out_dir, 'rolling_std.png'), bbox_inches='tight')
+    else:
+        plt.show()
 
     # Mark anomalies based on threshold (you can adjust this threshold as needed)
     anomalies = df[(diff_rolling_std < lower) | (diff_rolling_std > upper)]
@@ -93,7 +103,7 @@ def detect_anomalies_rolling_std(
         outpath=osp.join(out_dir, 'anomalies_rolling_std.png'),
         freq=visualize_freq,
         anomalies=anomalies,
-        figsize=(16,4)
+        figsize=figsize
     )
     return anomalies
 
@@ -102,7 +112,8 @@ def detect_anomalies_stl(
         period=None,
         visualize_freq='D',
         threshold=3,
-        out_dir:str=None
+        out_dir:str=None,
+        figsize=(16,16)
     ):
 
     df = df.sort_values(by=time_column)
@@ -120,10 +131,13 @@ def detect_anomalies_stl(
 
     # Plot the original series and the estimated trend
     estimated = trend + seasonal
-    plt.figure(figsize=(16,4))
+    plt.figure(figsize=(figsize[0], figsize[1]//4))
     plt.plot(df[value_column])
     plt.plot(estimated)
-    plt.savefig(osp.join(out_dir, 'estimated.png'), bbox_inches='tight')
+    if out_dir is not None:
+        plt.savefig(osp.join(out_dir, 'estimated.png'), bbox_inches='tight')
+    else:
+        plt.show()
     plt.close()
 
     # Detect anaomalies based on residuals
@@ -131,15 +145,17 @@ def detect_anomalies_stl(
     resid_dev = resid.std()
     lower = resid_mu - threshold*resid_dev
     upper = resid_mu + threshold*resid_dev
-    plt.figure(figsize=(16,4))
+    plt.figure(figsize=(figsize[0], figsize[1]//4))
     plt.plot(resid)
     plt.fill_between(
         [resid.index.min(), resid.index.max()], 
-        lower, upper, color='g', alpha=0.25, 
+        lower, upper, color='C3', alpha=0.25, 
         linestyle='--', linewidth=2
     )
-    plt.savefig(osp.join(out_dir, 'residual.png'), bbox_inches='tight')
-
+    if out_dir is not None:
+        plt.savefig(osp.join(out_dir, 'residual.png'), bbox_inches='tight')
+    else:
+        plt.show()
     # Visualize anomalies
     anomalies = df[(resid < lower) | (resid > upper)]
     visualize_ts(
@@ -147,12 +163,12 @@ def detect_anomalies_stl(
         outpath=osp.join(out_dir, 'anomalies_stl.png'),
         freq=visualize_freq,
         anomalies=anomalies,
-        figsize=(16,4)
+        figsize=(figsize[0], figsize[1]//4)
     )
 
     return anomalies
 
-def impute_anomalies(df, value_column, anomalies, out_dir=None):
+def impute_anomalies(df, value_column, anomalies, out_dir=None, figsize=(16,4)):
     # Impute new values for anomalies, 
     # using mean of window before and after anomaly
     new_df = df.copy()
@@ -165,11 +181,16 @@ def impute_anomalies(df, value_column, anomalies, out_dir=None):
     new_df[value_column] = new_df[value_column].interpolate(limit_direction="both")
     
     # Plot only the difference, highlighting the difference parts
-    plt.figure(figsize=(16,4))
-    plt.plot(new_df[value_column], label='Imputed', color='red')
-    plt.plot(df[value_column], label='Original', color='blue', alpha=0.5)
+    plt.figure(figsize=figsize)
+    plt.plot(new_df[value_column], label='Imputed', color='C1')
+    plt.plot(df[value_column], label='Original', color='C0', alpha=0.5)
     plt.legend()
-    plt.savefig(osp.join(out_dir, 'imputed.png'), bbox_inches='tight')
+
+    if out_dir is not None:
+        plt.savefig(osp.join(out_dir, 'imputed.png'), bbox_inches='tight')
+    else:
+        plt.show()
+
     # Clear memory of matplotlib
     plt.cla()
     plt.clf()
