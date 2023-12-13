@@ -74,9 +74,9 @@ def fit_cv(
         # Visualize input to debug
         # visualize_ts(
         #     engineered_train.dropna().reset_index(), time_column, 0, 
-        #     outpath=osp.join(out_dir, f'input.png'),
+        #     outpath=osp.join(out_dir, f'input2.png'),
         #     freq=visualize_freq,
-        #     figsize=(16,6),
+        #     figsize=(24,8),
         #     check_stationarity=True
         # )
 
@@ -145,17 +145,30 @@ def fit_cv(
         plt.close('all')
 
         # Evaluate the model
-        score = validate(
+        intersected_index = train_df.index.intersection(predictions.index)
+        val_score = validate(
+            train_df[value_column].loc[intersected_index].values, 
+            predictions['predicted_mean'].loc[intersected_index].values
+        )
+
+        with open(osp.join(out_dir, 'val_metrics.json'), 'w') as f:
+            json.dump(val_score, f)
+
+        # Evaluate the model
+        test_score = validate(
             test_df[value_column].values, 
             predictions['predicted_mean'].loc[test_df.index].values
         )
+
+        with open(osp.join(out_dir, 'test_metrics.json'), 'w') as f:
+            json.dump(test_score, f)
 
         # Save predictions
         predictions = predictions.reset_index()
         predictions = predictions.rename({'index': time_column}, axis=1)
         predictions.to_csv(osp.join(out_dir, 'predictions.csv'), index=False)
 
-        return score
+        return val_score, test_score
 
 if __name__ == '__main__':
 
@@ -165,6 +178,8 @@ if __name__ == '__main__':
     task = 'AD&P'
     time_column = TASK_COLUMNS[task]['time_column']
     value_column = TASK_COLUMNS[task]['value_column']
+    val_scores = []
+    test_scores = []
 
     # load yaml file
     configs = yaml.load(open(args.config_file, 'r'), Loader=yaml.FullLoader)
@@ -196,7 +211,7 @@ if __name__ == '__main__':
         out_dir = osp.join(OUT_DIR, 'forecast', file_prefix)
         os.makedirs(out_dir, exist_ok=True)
 
-        metrics = fit_cv(
+        val_score, test_score = fit_cv(
             df, time_column, value_column,
             n_splits=tuner_config.pop('n_splits', 1),
             method=model_config['method'],
@@ -208,5 +223,10 @@ if __name__ == '__main__':
             feature_method=model_config.get('fe_method', None),
         )
 
-        with open(osp.join(out_dir, 'metrics.json'), 'w') as f:
-            json.dump(metrics, f)
+        val_score['id'] = file_prefix
+        test_score['id'] = file_prefix
+        val_scores.append(val_score)
+        test_scores.append(test_score)
+
+    pd.DataFrame(val_scores).to_csv(osp.join(OUT_DIR, 'forecast', 'val_scores.csv'), index=False)
+    pd.DataFrame(test_scores).to_csv(osp.join(OUT_DIR, 'forecast', 'test_scores.csv'), index=False)

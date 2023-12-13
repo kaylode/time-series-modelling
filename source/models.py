@@ -124,10 +124,10 @@ def predict_prophet(model, num_predictions=5):
 
 
 def validate(actual, forecast):
-    mape = np.mean(np.abs(forecast - actual)/(np.abs(actual)+1e-6))  # MAPE
+    mape = np.mean(np.abs(forecast - actual)/(np.abs(actual)+1))  # MAPE
     me = np.mean(forecast - actual)             # ME
     mae = np.mean(np.abs(forecast - actual))    # MAE
-    mpe = np.mean((forecast - actual)/(actual+1e-6))   # MPE
+    mpe = np.mean((forecast - actual)/(actual+1))   # MPE
     rmse = np.mean((forecast - actual)**2)**.5  # RMSE
     corr = np.corrcoef(forecast, actual)[0,1]   # corr
 
