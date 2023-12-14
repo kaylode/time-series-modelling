@@ -17,7 +17,7 @@ Then came the coding interview session:
 
 ## Second round (Time-series)
 
-I was asked to do three case studies on 2 time series datasets: [CASE STUDIES](./CASE_STUDIES.md). During the presentation, they asked some follow-up questions:
+I was asked to do three case studies on 2 time series datasets. During the presentation, they asked some follow-up questions:
 - What are the parameters in ARIMA model (p,d,q) ?
 - How do you choose window size for rolling statistics?
 - How do you choose thresholding value for anomalies detection ?
