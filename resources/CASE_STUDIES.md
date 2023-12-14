@@ -8,8 +8,8 @@ Data are contained in two subfolders:
   2.	C (data for clustering case study)
 
 <p align="center">
-    <img height="250" alt="screen" src="resources/figures/ADnP.png">
-    <img height="250" alt="screen" src="resources/figures/C.png">
+    <img height="250" alt="screen" src="./figures/ADnP.png">
+    <img height="250" alt="screen" src="./figures/C.png">
 </p>
 
 ## The tasks
